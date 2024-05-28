@@ -1,0 +1,6 @@
+replicate
+discord.py
+tiktoken
+blobfile
+pillow
+mysql-connector-python
