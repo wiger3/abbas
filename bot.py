@@ -70,9 +70,9 @@ async def on_message(message: discord.Message):
                     print("ERROR: Failed to fetch authenticated image from Discord. Skipping")
                     continue
             caption = await interrogate_clip(url)
-            abbas.mysql.decrease_clip_left(message.author.id)
             if caption is None:
-                caption = ''
+                continue
+            abbas.mysql.decrease_clip_left(message.author.id)
             caption = caption.split(',', 1)[0]
             name = uridata.path.split('/')[-1]
             img_text = f"![{caption}]({name})"
@@ -119,7 +119,6 @@ async def create_message_tree(message: discord.Message, max_length: int = 20) ->
     msg = message
     ref = msg.reference
     while max_length != 0 and ref is not None and ref.message_id is not None:
-        max_length -= 1
         if ref.cached_message is None:
             print(f"Fetching message {ref.message_id}")
             if ref.channel_id == msg.channel.id:
@@ -138,9 +137,10 @@ async def create_message_tree(message: discord.Message, max_length: int = 20) ->
             # print(f"Resolved message {ref.message_id} from cache")
             msg = ref.cached_message
         ref = msg.reference
-        if msg.content == '':
+        if not msg.clean_content:
             continue
         messages.append(msg)
+        max_length -= 1
     return messages
 
 # adding fetched message to cache

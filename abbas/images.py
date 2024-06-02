@@ -16,7 +16,7 @@ if os.path.isdir('tmp'):
     from shutil import rmtree
     rmtree('tmp')
 
-async def interrogate_clip(url: str) -> str:
+async def interrogate_clip(url: str, remove_files: bool = True) -> str:
     """
     Describes an image using CLIP
     This routine downloads the image from the internet, converts it to 512p JPEG, and then sends to a CLIP interrogator.
@@ -59,7 +59,7 @@ async def interrogate_clip(url: str) -> str:
             y = 512
         im = im.resize((x, y))
     filename = os.path.splitext(filename)[0] + ".jpg"
-    if orig_file != filename:
+    if remove_files and orig_file != filename:
         try:
             os.remove(orig_file)
         except OSError:
@@ -90,10 +90,11 @@ async def interrogate_clip(url: str) -> str:
         prediction.cancel()
     if prediction.status != "succeeded":
         return None
-    try:
-        os.remove(filename)
-    except OSError:
-        pass
+    if remove_files:
+        try:
+            os.remove(filename)
+        except OSError:
+            pass
     return prediction.output
 
 
@@ -119,7 +120,7 @@ async def parse_tenor(url: str) -> tuple[str, str]:
         return None
 
 async def main():
-    caption = await interrogate_clip(input("File link: "))
+    caption = await interrogate_clip(input("File link: "), False)
     if caption is None:
         print(":(")
         return
