@@ -1,6 +1,5 @@
 replicate
-discord.py
+discord.py-self
 tiktoken
 blobfile
 pillow
-mysql-connector-python

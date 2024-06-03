@@ -167,6 +167,7 @@ cython_debug/
 system_prompt*.txt
 first_message*.txt
 additional_contexts*.json
+tracked_channels*.txt
 abbas.bat
 mysql.ini
 tmp/
