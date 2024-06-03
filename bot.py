@@ -99,13 +99,23 @@ async def on_message(message: discord.Message):
         await message.reply(embed=discord.Embed(
             title="Wystąpił błąd",
             description="Podczas odpowiadania wystąpił następujący błąd: " + e_type
-        ))
+        ), view=ExceptView(message))
         return
     print("Abbas Baszir: " + text)
     if reply is None:
         await message.reply(text)
     else:
         await reply.edit(content=text)
+
+class ExceptView(discord.ui.View):
+    def __init__(self, message: discord.Message):
+        super().__init__(timeout=60)
+        self.message = message
+    
+    @discord.ui.button(label="Retry", style=discord.ButtonStyle.red)
+    async def retry(self, button: discord.Button, interaction: discord.Interaction):
+        await on_message(self.message)
+        self.stop()
 
 # compiles a list from a linked list of messages (the name "tree" is inaccurate)
 # list is in order of newest to oldest
