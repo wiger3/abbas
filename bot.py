@@ -12,13 +12,11 @@ from typing import Optional
 
 token = os.environ['DISCORD_TOKEN']
 
-intents = discord.Intents.default()
-intents.message_content = True
 tracked_channels: list[int] = []
 waiting_task: asyncio.Task = None
 future: asyncio.Future = None
 
-client = discord.Client(intents=intents)
+client = discord.Client()
 
 @client.event
 async def on_ready():
@@ -30,6 +28,10 @@ async def on_message(message: discord.Message):
     global waiting_task, future
     if future and not future.done():
         await future
+    if message.author == client.user:
+        return
+    if message.content.startswith('.'):
+        return
     if os.path.isfile('tracked_channels.txt'):
         try:
             with open('tracked_channels.txt', 'r', encoding='utf-8') as file:
@@ -38,8 +40,6 @@ async def on_message(message: discord.Message):
                     tracked_channels.append(int(line))
         except OSError:
             pass
-    if message.author == client.user:
-        return
     if not message.channel.id in tracked_channels:
         return
     print(f"@{message.author.display_name}: {message.clean_content}")
