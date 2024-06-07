@@ -7,8 +7,6 @@ from urllib.parse import urlparse
 import httpx
 from PIL import Image
 import replicate
-import replicate.client
-import replicate.version
 
 tenor_apikey = os.getenv('TENOR_APIKEY')
 

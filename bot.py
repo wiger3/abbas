@@ -13,6 +13,8 @@ token = os.environ['DISCORD_TOKEN']
 intents = discord.Intents.default()
 intents.message_content = True
 
+cache: dict[int, dict] = {}
+
 client = discord.Client(intents=intents)
 
 @client.event
@@ -32,12 +34,17 @@ async def on_message(message: discord.Message):
         tree = await create_message_tree(message)
         print(f"Conversation length for {message.author.display_name}: {len(tree)}")
         for msg in tree:
+            if msg.id in cache:
+                messages.append(cache[msg.id])
+                continue
             username = msg.author.display_name
             if msg.author == client.user:
                 username = 'assistant'
             elif username.lower() == 'assistant' or username.lower() == 'system':
                 username = 'user'
-            messages.append({'sender': username, 'text': msg.clean_content})
+            x = {'sender': username, 'text': msg.clean_content}
+            cache[msg.id] = x
+            messages.append(x)
         if os.path.isfile('first_message.txt'):
             try:
                 with open('first_message.txt', 'r', encoding='utf-8') as file:
@@ -83,7 +90,7 @@ async def on_message(message: discord.Message):
                 latest = latest.replace(url, img_text)
             else:
                 latest += "\n" + img_text
-        # message.content = latest
+        cache[message.id]['text'] = latest
         messages[0]['text'] = latest
         response = await abbas.generate_response(messages)
     context: dict = response[0]
