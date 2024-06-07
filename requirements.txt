@@ -4,3 +4,4 @@ tiktoken
 blobfile
 pillow
 mysql-connector-python
+elevenlabs

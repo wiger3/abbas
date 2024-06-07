@@ -13,7 +13,7 @@ try:
     mydb = mysql.connect(**sql_auth)
 except mysql.errors.DatabaseError as e:
     print(e)
-    print("ERROR: Failed to connect to MySQL! CLIP interrogator disabled")
+    print("ERROR: Failed to connect to MySQL!")
     mydb = False
 if mydb:
     print(f"MySQL connected to {mydb.user}@{mydb.server_host}")
@@ -29,6 +29,7 @@ def can_user_interrogate(id: int) -> bool:
     Returns:
         True/False
     """
+    return True
     if id == 327762629575704576 or id == 804792397602095134:
         return True
     if not mydb:
@@ -52,6 +53,7 @@ def decrease_clip_left(id: int, max_uses: int = 3) -> None:
         id: Discord ID of the user
         max_uses: The amount of uses a user gets every day (default: 3)
     """
+    return
     if not mydb:
         return
     mycur.execute(f"SELECT * FROM `limits` WHERE `userid`='{id}' LIMIT 1")
