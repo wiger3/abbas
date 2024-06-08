@@ -35,14 +35,13 @@ async def speak(text: str) -> AsyncGenerator[bytes, None]:
         wav = mp3_to_pcm(mp3_response)
         yield wav[last:]
         last = len(wav)
-
 def mp3_to_pcm(audio: bytes) -> bytes:
     """
     Converts MP3 to 16bit PCM audio.
 
     This is so the audio can be sent on a Discord voice channel.
     """
-    command = "ffmpeg -i pipe: -c:a pcm_s16le -f s16le pipe:".split(' ')
+    command = "ffmpeg -i pipe: -c:a pcm_s16le -f s16le -ar 48000 -ac 2 pipe:".split(' ')
     ffmpeg = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -77,7 +76,7 @@ async def main():
                 )
                 raise ValueError(message)
 
-            mpv_command = ['mpv', '--demuxer=rawaudio', '--demuxer-rawaudio-channels=1', '--demuxer-rawaudio-rate=44100', '--demuxer-rawaudio-format=s16le', '--no-cache', '--no-terminal', '--', 'fd://0']
+            mpv_command = ['mpv', '--demuxer=rawaudio', '--demuxer-rawaudio-channels=2', '--demuxer-rawaudio-rate=48000', '--demuxer-rawaudio-format=s16le', '--no-cache', '--no-terminal', '--', 'fd://0']
             mpv_process = subprocess.Popen(
                 mpv_command,
                 stdin=subprocess.PIPE,
@@ -100,7 +99,7 @@ async def main():
         audio = await stream_pcm_async(speak(text))
         with open('audio.pcm', 'wb') as file:
             file.write(audio)
-        print("Spoken audio was saved as 16-bit Little Endian PCM in audio.pcm!")
+        print("Spoken audio was saved as 16-bit Little Endian 48KHz stereo PCM in audio.pcm!")
 
 if __name__ == "__main__":
     asyncio.run(main())
