@@ -121,8 +121,8 @@ class ExceptView(discord.ui.View):
     
     @discord.ui.button(label="Retry", style=discord.ButtonStyle.red)
     async def retry(self, button: discord.Button, interaction: discord.Interaction):
+        await interaction.response.pong()
         await on_message(self.message)
-        self.stop()
 
 # compiles a list from a linked list of messages (the name "tree" is inaccurate)
 # list is in order of newest to oldest
