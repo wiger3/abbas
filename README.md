@@ -12,9 +12,15 @@ Download the Llama3 tokenizer from Meta:
 1. Go to [Request access to Meta Llama](https://llama.meta.com/llama-downloads) and fill in your details
 2. Copy the download link you received
 3. Run the following commands in your terminal:
-```
+```bash
+# bash
 PRESIGNED_URL="paste_your_copied_url_here"
 wget --continue ${PRESIGNED_URL/'*'/"70b_instruction_tuned/tokenizer.model"}
+```
+```powershell
+# powershell
+$PRESIGNED_URL="paste_your_copied_url_here"
+Invoke-WebRequest $PRESIGNED_URL.replace('*', '70b_instruction_tuned/tokenizer.model') -OutFile "tokenizer.model"
 ```
 4. Copy the tokenizer.model file to the llama folder in the repo directory
 

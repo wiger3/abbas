@@ -51,7 +51,7 @@ async def generate_response(messages: list[dict]) -> tuple[dict, str]:
                     regex = re.compile(trigger, re.I)
                     match = regex.search(msg['text'])
                     if match:
-                        text += f"<|start_header_id|>system<|end_header_id|>\n\n{context['context']}<|eot_id|>"
+                        text = f"<|start_header_id|>system<|end_header_id|>\n\n{context['context']}<|eot_id|>{text}"
                         break
         if len(tt.encode(prefix + text + prompt + suffix, bos=False, eos=False)) >= context_length:
             break
