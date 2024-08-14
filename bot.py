@@ -2,6 +2,7 @@ import os
 import asyncio
 import discord
 import abbas.voice
+from abbas.message import Message
 
 token = os.environ['DISCORD_TOKEN']
 
@@ -9,12 +10,14 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 voice: discord.VoiceClient = None
+cache: dict[int, Message] = {}
 
 client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
     await client.change_presence(activity=discord.CustomActivity(name="Bogaty szejk / voice test"))
+    await abbas.mysql.connect()
     print(f"Abbas Baszir working as {client.user}")
 
 @client.event
