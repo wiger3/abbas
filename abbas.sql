@@ -8,15 +8,16 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 
-CREATE TABLE `limits` (
-  `userid` bigint(20) NOT NULL,
-  `last_clip` date NOT NULL,
-  `clip_left` int(11) NOT NULL
+CREATE TABLE `messages` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `parent` bigint(20) UNSIGNED DEFAULT NULL,
+  `sender` varchar(32) NOT NULL,
+  `text` text NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
-ALTER TABLE `limits`
-  ADD UNIQUE KEY `userid` (`userid`);
+ALTER TABLE `messages`
+  ADD PRIMARY KEY (`id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

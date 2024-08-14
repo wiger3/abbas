@@ -6,6 +6,7 @@ import asyncio
 import replicate
 from replicate.exceptions import ReplicateError, ModelError
 from llama.tokenizer import Tokenizer
+from .message import Message
 
 tt = Tokenizer('llama/tokenizer.model')
 
@@ -14,13 +15,13 @@ system_prompt = "Jesteś bogaty szejk Abbas Baszir."
 additional_contexts = []
 
 # messages should be in order of newest to oldest
-async def generate_response(messages: list[dict]) -> tuple[dict, str]:
+async def generate_response(messages: list[Message]) -> tuple[dict, str]:
     """
     Uses llama3 to generate a response to the message.
     The list of messages get converted to a conversation and sent to the model, along with a system prompt read from ./system_prompt.txt
 
     Args:
-        messages: list of dicts with the keys: sender, text. Messages should be in order of newest to oldest
+        messages: list of Message objects
     Returns:
         tuple containing:
         [0]: input sent to the model containing the prompt and generation data
@@ -44,12 +45,12 @@ async def generate_response(messages: list[dict]) -> tuple[dict, str]:
     suffix = f"<|start_header_id|>assistant<|end_header_id|>\n\n"
     prompt = ''
     for msg in messages:
-        text = f"<|start_header_id|>{msg['sender']}<|end_header_id|>\n\n{msg['text']}<|eot_id|>"
-        if msg['sender'] != 'assistant':
+        text = f"<|start_header_id|>{msg.sender}<|end_header_id|>\n\n{msg.text}<|eot_id|>"
+        if msg.sender != 'assistant':
             for context in additional_contexts:
                 for trigger in context['trigger_words']:
                     regex = re.compile(trigger, re.I)
-                    match = regex.search(msg['text'])
+                    match = regex.search(msg.text)
                     if match:
                         text = f"<|start_header_id|>system<|end_header_id|>\n\n{context['context']}<|eot_id|>{text}"
                         break
@@ -59,15 +60,13 @@ async def generate_response(messages: list[dict]) -> tuple[dict, str]:
     prompt = f"{prefix}{prompt}{suffix}"
 
     zaposciewanie: bool = is_zaposciany(messages)
-    # i am aware that this rerolls temperature every prompt, this is intended
-    # TODO: make prettier when this shitty mouse gets replaced
+
     temperature = 0.81
     for x in messages[1:]:
-        if x['sender'] == 'assistant':
+        if x.sender == 'assistant':
             temperature = heat_up(temperature, 0.01, 0.02)
     if zaposciewanie:
         temperature = heat_up(temperature, 0.1, 0.2, cap=9)
-        print("[generowanie najbardziej zapościanej odpowiedzi]", end='\r')
     input = {
         "prompt": prompt,
         "prompt_template": "{prompt}",
@@ -87,10 +86,10 @@ async def generate_response(messages: list[dict]) -> tuple[dict, str]:
         print(e)
         return (input, e)
 
-def is_zaposciany(messages: list[str]) -> bool:
+def is_zaposciany(messages: list[Message]) -> bool:
     for x in messages:
-        if x['sender'] == 'assistant':
-            roleplay = x['text'].split("*")[1::2]
+        if x.sender == 'assistant':
+            roleplay = x.text.split("*")[1::2]
             for me in roleplay:
                 if any(x in me for x in ['zaposciewa', 'zapościewa', 'crack', 'krock']):
                     return True
@@ -104,6 +103,7 @@ def heat_up(temperature: float, min: float, max: float, cap: float = 1.155) -> f
         temperature += lvl
     return temperature
 
+# TODO: fix demo
 async def main():
     import os
     messages = []

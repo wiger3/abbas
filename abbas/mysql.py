@@ -1,69 +1,61 @@
-import asyncio
-from datetime import date
-import mysql.connector as mysql
+import mysql.connector.aio as mysql
+from .message import Message
 
-sql_auth = {}
-with open('mysql.ini', 'r', encoding='utf-8') as file:
-    a = []
-    for line in file:
-        a.append(line.strip('\n').split('=', 1))
-    sql_auth = dict(a)
-
-try:
-    mydb = mysql.connect(**sql_auth)
-except mysql.errors.DatabaseError as e:
-    print(e)
-    print("ERROR: Failed to connect to MySQL! CLIP interrogator disabled")
-    mydb = False
-if mydb:
-    print(f"MySQL connected to {mydb.user}@{mydb.server_host}")
-    mycur = mydb.cursor()
-    
-
-def can_user_interrogate(id: int) -> bool:
+db, cur = None, None
+async def connect():
     """
-    Can the user use image recognition (their limit has not run out)
-
-    Args:
-        id: Discord ID of the user
-    Returns:
-        True/False
+    Connect to the MySQL database. Must be used before any other functions.
     """
-    if id == 327762629575704576 or id == 804792397602095134:
-        return True
-    if not mydb:
-        return False
-    mycur.execute(f"SELECT * FROM `limits` WHERE `userid`='{id}' LIMIT 1")
-    result = mycur.fetchone()
-    if result is None:
-        return True
-    last_clip = result[1]
-    clip_left = result[2]
+    global db, cur
+    sql_auth = {}
+    with open('mysql.ini', 'r', encoding='utf-8') as file:
+        a = []
+        for line in file:
+            a.append(line.strip('\n').split('=', 1))
+        sql_auth = dict(a)
+    db = await mysql.connect(**sql_auth)
+    print(f"MySQL connected to {db.user}@{db.server_host}")
+    cur = await db.cursor()
 
-    if last_clip != date.today():
-        return True
-    return clip_left > 0
 
-def decrease_clip_left(id: int, max_uses: int = 3) -> None:
+async def insert_message(id: int, parent: int, sender: str, text: str):
+    await insert_message(Message(id, parent, sender, text))
+async def insert_message(message: Message):
     """
-    Subtract from the available CLIP uses for the user
-
-    Args:
-        id: Discord ID of the user
-        max_uses: The amount of uses a user gets every day (default: 3)
+    Insert message into database
     """
-    if not mydb:
-        return
-    mycur.execute(f"SELECT * FROM `limits` WHERE `userid`='{id}' LIMIT 1")
-    result = mycur.fetchone()
-    if result is None:
-        mycur.execute(f"INSERT INTO `limits` VALUES ('{id}', '{date.today()}', '{max_uses-1}')")
-        mydb.commit()
-        return
-    last_clip = result[1]
-    clip_left = result[2]
-    if last_clip != date.today() and clip_left <= 0:
-        clip_left = max_uses
-    clip_left -= 1
-    mycur.execute(f"UPDATE `limits` SET `clip_left`='{clip_left}', `last_clip`='{date.today()}' WHERE `userid`='{id}'")
-    mydb.commit()
+    if not db or not cur:
+        raise RuntimeError("MySQL server not connected!")
+    await cur.execute("INSERT INTO `messages` VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE text=%s", (*message.tuple(), message.text))
+    await db.commit()
+async def insert_messages(messages: list[Message]):
+    """
+    Insert multiple messages into database
+    """
+    if not db or not cur:
+        raise RuntimeError("MySQL server not connected!")
+    for message in messages:
+        if not isinstance(message, Message):
+            print(f"TypeError: insert_messages() requires abbas.message.Message, not {type(message)}")
+            continue
+        await cur.execute("INSERT INTO `messages` VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE text=%s", (*message.tuple(), message.text))
+    await db.commit()
+
+async def fetch_message_list(message_id: int) -> list[Message]:
+    """
+    Recursively build a list of messages in conversation, starting from the youngest child.
+    """
+    if not db or not cur:
+        raise RuntimeError("MySQL server not connected!")
+    await cur.execute("""
+                        WITH RECURSIVE cte AS (
+                          SELECT id, parent, sender, text FROM `messages` WHERE `id`=%s
+                          UNION ALL
+                          SELECT m.id, m.parent, m.sender, m.text FROM messages m
+                          INNER JOIN cte
+                            ON m.id=cte.parent
+                        )
+                        SELECT * FROM cte;
+                      """, (message_id,))
+    result = await cur.fetchall()
+    return [Message(*x) for x in result]
