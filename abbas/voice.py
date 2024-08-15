@@ -13,7 +13,9 @@ voice_abbas = elevenlabs.Voice(
 )
 
 async def listen(audio: bytes) -> str:
-    duration = len(audio) / 48000 / 8 * 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels]
+    duration = len(audio) / 48000 / 8 * 2 + 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels] + [2 seconds leeway]
+    if duration < 6:
+        duration = 6
     command = "ffmpeg -c:a pcm_s16le -f s16le -ar 48000 -ac 2 -i pipe: -f mp3 pipe:".split(' ')
     ffmpeg = subprocess.Popen(
         command,
