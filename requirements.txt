@@ -1,7 +1,9 @@
 replicate
-discord.py
+discord.py[voice]
 tiktoken
 blobfile
 pillow
 mysql-connector-python
-elevenlabs
+elevenlabs==1.5.0
+pynacl
+discord-ext-voice-recv

@@ -1,6 +1,7 @@
-import io
+import base64
 import asyncio
 import subprocess
+import replicate
 import elevenlabs
 from elevenlabs.client import AsyncElevenLabs
 from typing import AsyncGenerator, AsyncIterator
@@ -11,8 +12,44 @@ voice_abbas = elevenlabs.Voice(
     settings=elevenlabs.VoiceSettings(stability=0, similarity_boost=0, style=1, use_speaker_boost=True)
 )
 
-async def listen():
-    raise NotImplementedError
+async def listen(audio: bytes) -> str:
+    duration = len(audio) / 48000 / 8 * 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels]
+    command = "ffmpeg -c:a pcm_s16le -f s16le -ar 48000 -ac 2 -i pipe: -f mp3 pipe:".split(' ')
+    ffmpeg = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    mp3, fferror = ffmpeg.communicate(audio)
+    if ffmpeg.returncode != 0 or len(mp3) == 0:
+        raise RuntimeError(f"FFmpeg failed! ({ffmpeg.returncode})\n{fferror.decode()}")
+    
+    # send audio to whisper
+    print("starting openai whisper")
+    model = await replicate.models.async_get('openai/whisper')
+    data = base64.b64encode(mp3).decode('utf-8')
+    audio = f"data:application/octet-stream;base64,{data}"
+    input = {
+        "model": "large-v3",
+        "language": "pl",
+        "translate": False,
+        "audio": audio
+    }
+    prediction = await replicate.predictions.async_create(
+        model.latest_version,
+        input=input
+    )
+    try:
+        async with asyncio.timeout(duration):
+            await prediction.async_wait()
+    except TimeoutError:
+        print(f"ERROR: Whisper timed out ({duration} seconds)")
+        prediction.cancel()
+    if prediction.status != "succeeded":
+        return None
+    return prediction.output['transcription']
+
 
 async def speak(text: str) -> AsyncGenerator[bytes, None]:
     """

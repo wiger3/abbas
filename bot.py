@@ -1,23 +1,32 @@
 import os
+import time
 import asyncio
+import threading
 import discord
+from discord.ext import voice_recv
+import discord.ext.voice_recv
 import abbas.voice
 from abbas.message import Message
+import discord.ext
+
+class VoiceClient(voice_recv.VoiceRecvClient):
+    def __init__(self, client: discord.Client, channel: discord.abc.Connectable):
+        super().__init__(client, channel)
+        self.msg: discord.Message = None
 
 token = os.environ['DISCORD_TOKEN']
 
 intents = discord.Intents.default()
 intents.message_content = True
 
-voice: discord.VoiceClient = None
+voice: VoiceClient = None
 cache: dict[int, Message] = {}
 
 client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
-    await client.change_presence(activity=discord.CustomActivity(name="Bogaty szejk / voice test"))
-    await abbas.mysql.connect()
+    await client.change_presence(activity=discord.CustomActivity(name="🎙 Voice test"))
     print(f"Abbas Baszir working as {client.user}")
 
 @client.event
@@ -36,7 +45,7 @@ async def on_message(message: discord.Message):
             if vstate is None or vstate.channel is None:
                 await message.reply("You are not in a voice channel!")
                 return
-            voice = await vstate.channel.connect()
+            voice = await vstate.channel.connect(cls=VoiceClient)
         case 'leave':
             if voice and voice.is_connected():
                 await voice.disconnect()
@@ -48,15 +57,23 @@ async def on_message(message: discord.Message):
             # with open('audio.pcm', 'rb') as file:
             #     chunk = file.read()
             voice.play(ChunkedPCMAudio(text))
+        case 'listen':
+            if not voice or not voice.is_connected():
+                await message.reply("I am not in a voice channel")
+                return
+            reply = await message.channel.send(embed=discord.Embed(title="Abbas Baszir voice test",
+                                                                   description=f"Current status: Listening to *{message.author.display_name}* in **{voice.channel.name}**")
+                                                                   .set_footer(text="wiger3/abbas"))
+            voice.msg = reply
+            voice.listen(Sink(message.author, asyncio.get_event_loop()))
+        case 'stop':
+            if not voice or not voice.is_connected():
+                await message.reply("I am not in a voice channel")
+                return
+            voice.stop()
 
 class ChunkedPCMAudio(discord.AudioSource):
-    SAMPLING_RATE = 48000
-    CHANNELS = 2
-    FRAME_LENGTH = 20  # in milliseconds
-    SAMPLE_SIZE = 2 * CHANNELS # 16-bit PCM = 2 bytes
-    SAMPLES_PER_FRAME = int(SAMPLING_RATE / 1000 * FRAME_LENGTH)
-
-    FRAME_SIZE = SAMPLES_PER_FRAME * SAMPLE_SIZE
+    FRAME_SIZE = discord.opus.Decoder.FRAME_SIZE
 
     def __init__(self, text: str):
         self.end = False
@@ -79,6 +96,44 @@ class ChunkedPCMAudio(discord.AudioSource):
         return self.loop.run_until_complete(self.aread())
     def cleanup(self):
         self.loop.stop()
+
+class Sink(voice_recv.AudioSink):
+    def __init__(self, user: discord.User | discord.Member, loop):
+        super().__init__()
+        self.user = user
+        self.last_packet = 0
+        self.buf = b''
+        self.msg: discord.Message = None
+        self.loop: asyncio.AbstractEventLoop = loop
+        threading.Thread(target=self.kill_listener).start()
+        print(f"Listening to {self.user.display_name}")
+    
+    def write(self, user: discord.Member | discord.User | None, data: voice_recv.VoiceData):
+        if self.msg is None:
+            self.msg = self.voice_client.msg
+        if user == self.user:
+            self.buf += data.pcm
+            self.last_packet = time.time()
+    
+    def kill_listener(self):
+        while self.last_packet == 0 or time.time() - self.last_packet < 1:
+            time.sleep(0.25)
+        print(f"Stopping listening to {self.user.display_name}")
+        vc = self.voice_client
+        self.msg.embeds[0].description = "Current status: Recognizing speech"
+        asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), self.loop)
+        vc.stop_listening()
+    
+    def cleanup(self):
+        text = asyncio.run_coroutine_threadsafe(abbas.voice.listen(self.buf), self.loop).result()
+        print(text)
+        self.msg.embeds[0].description = "Current status: Generating response"
+        self.msg.embeds[0].add_field(name="Detected text", value=f"```{text}```")
+        asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), self.loop)
+    
+    def wants_opus(self) -> bool:
+        return False
+
 
 
 client.run(token)
