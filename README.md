@@ -7,6 +7,10 @@ Download requirements
 ```
 pip install -r requirements.txt
 ```
+`voice` branch requires FFmpeg. It can be downloaded as follows: \
+Windows: https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-essentials.7z \
+Linux: Download using your package manager \
+(Optional) `voice.py` demo requires mpv.
 
 Download the Llama3 tokenizer from Meta:
 1. Go to [Request access to Meta Llama](https://llama.meta.com/llama-downloads) and fill in your details
@@ -27,11 +31,8 @@ Invoke-WebRequest $PRESIGNED_URL.replace('*', '70b_instruction_tuned/tokenizer.m
 Get the following API keys:
 1. Replicate: Make an account, set up billing, and go to https://replicate.com/account/api-tokens
 2. Discord: Go to https://discord.com/developers/applications, make a new application, go to the Bot tab and click "Reset Token"
-3. Tenor: https://developers.google.com/tenor/guides/quickstart#setup
 
-Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKEN`, `TENOR_APIKEY`.
-
-Get a MySQL server and import the abbas.sql file, then fill out the mysql.ini file
+Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKEN`.
 
 (Optional) Create prompting files for the model:
 1. system_prompt.txt: System prompt that directs the model
