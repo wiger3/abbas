@@ -5,6 +5,7 @@ import threading
 import time
 import discord
 from discord.ext import voice_recv
+from discord.ext.voice_recv.silence import SILENCE_PCM
 import replicate.exceptions
 import abbas
 import abbas.voice
@@ -16,26 +17,48 @@ class VoiceClient(voice_recv.VoiceRecvClient):
         self.msg: discord.Message = None
         self.messages: list[Message] = []
     
-    def stop_listening(self, user: discord.User | discord.Member = None, buf: bytes = None) -> None:
+    def stop_listening(self, bufs: dict[bytes] = None):
         super().stop_listening()
-        if user is None or buf is None:
+        if bufs is None:
             return
+        def user(id: int):
+            return next((x for x in self.channel.members if x.id == id), None)
         started_at = time.time()
         loop = self.client.loop
-        text = asyncio.run_coroutine_threadsafe(abbas.voice.listen(buf), loop).result()
-        if text is None:
+        async def tasks():
+            t: list[asyncio.Task] = []
+            async with asyncio.TaskGroup() as tg:
+                for buf in bufs.values():
+                    t.append(tg.create_task(abbas.voice.listen(buf)))
+            return dict(zip(bufs.keys(), [x.result() for x in t]))
+        text: dict = asyncio.run_coroutine_threadsafe(tasks(), loop).result()
+        print(text)
+        if list(text.values()).count(None) == len(text):
             print("Responding with timeout embed")
-            e_type = "Whisper timeout"
-            self.msg.embeds[0].description = "Current status: Error \u26a0\ufe0f"
-            self.msg.embeds[0].colour = 0xED4245
-            self.msg.embeds[0].add_field(name="Wystąpił błąd", value="Podczas odpowiadania wystąpił następujący błąd: " + e_type, inline=False)
-            asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), loop)
+            e_type = "Whisper timeout for all speakers"
+            self.update_embed("Error \u26a0\ufe0f",
+                              colour=0xED4245,
+                              field=("Wystąpił błąd", "Podczas odpowiadania wystąpił następujący błąd: " + e_type))
             return
-        print(f"{user.display_name}: {text}")
-        self.msg.embeds[0].description = "Current status: Generating response"
-        self.msg.embeds[0].add_field(name="Detected text", value=f"```{text}```", inline=False)
-        asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), loop)
-        self.create_message(user.display_name, text)
+        elif None in text.values():
+            self.update_embed(field=("Wystąpił błąd", f"Some speech recognitions failed: {", ".join([user(x).display_name for x in text if text[x] is None])}"))
+                
+        detected = []
+        for k, v in text.items():
+            if v is None or v == '':
+                continue
+            self.create_message(user(k).display_name, v)
+            detected.append(f"{user(k).display_name}: {v}")
+        if not detected:
+            self.update_embed("Error \u26a0\ufe0f",
+                              colour=0xED4245,
+                              field=("Wystąpił błąd", "Podczas odpowiadania wystąpił następujący błąd: Nie wykryto żadnej mowy"))
+            return
+        detected = "\n".join(detected)
+        print(detected)
+        self.update_embed("Generating response",
+                          field=("Detected text", f"```{detected}```"))
+        print(self.messages)
         input, text = asyncio.run_coroutine_threadsafe(abbas.generate_response(self.messages[::-1]), loop).result()
         print(input)
         if isinstance(text, replicate.exceptions.ReplicateException):
@@ -45,24 +68,33 @@ class VoiceClient(voice_recv.VoiceRecvClient):
                 e_type = text.type
             elif isinstance(text, replicate.exceptions.ModelError):
                 e_type = "Prediction failed, please try again"
-            self.msg.embeds[0].description = "Current status: Error \u26a0\ufe0f"
-            self.msg.embeds[0].colour = 0xED4245
-            self.msg.embeds[0].add_field(name="Wystąpił błąd", value="Podczas odpowiadania wystąpił następujący błąd: " + e_type, inline=False)
-            asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), loop)
+            self.update_embed("Error \u26a0\ufe0f",
+                              colour=0xED4245,
+                              field=("Wystąpił błąd", "Podczas odpowiadania wystąpił następujący błąd: " + e_type))
             self.messages = self.messages[:-1]
             return
-        self.msg.embeds[0].description = f"Current status: Done in {(time.time() - started_at):.2f}s 👍\nCurrent conversation length: {len(self.messages)+1}"
-        self.msg.embeds[0].colour = 0x57F287
-        self.msg.embeds[0].add_field(name="Response", value=f"```{text}```", inline=False)
-        asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), loop)
+        self.update_embed(f"Done in {(time.time() - started_at):.2f}s 👍\nCurrent conversation length: {len(self.messages)+1}",
+                          colour=0x57F287,
+                          field=("Response", f"```{text}```"))
         print("Abbas Baszir: " + text)
         self.create_message('assistant', text)
         self.play(ChunkedPCMAudio(text))
 
     
     def create_message(self, sender: str, text: str):
+        if not text or not sender:
+            return
         msg = Message(int(time.time()*1000), self.messages[-1].id if self.messages else None, sender, text)
         self.messages.append(msg)
+    
+    def update_embed(self, status: str = None, colour: int = None, field: tuple = None):
+        if status is not None:
+            self.msg.embeds[0].description = f"Current status: {status}"
+        if colour is not None:
+            self.msg.embeds[0].colour = colour
+        if field is not None:
+            self.msg.embeds[0].add_field(name=field[0], value=field[1], inline=False)
+        return asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), self.client.loop).result()
 
 token = os.environ['DISCORD_TOKEN']
 
@@ -94,6 +126,8 @@ async def on_message(message: discord.Message):
             if vstate is None or vstate.channel is None:
                 await message.reply("You are not in a voice channel!")
                 return
+            if voice and voice.is_connected():
+                await voice.disconnect()
             voice = await vstate.channel.connect(cls=VoiceClient)
         case 'leave':
             if voice and voice.is_connected():
@@ -109,19 +143,15 @@ async def on_message(message: discord.Message):
             if not voice or not voice.is_connected():
                 await message.reply("I am not in a voice channel")
                 return
-            user = message.author
-            if len(args) > 1:
-                user = int(args[1])
-                user = next((x for x in voice.channel.members if x.id == user), None)
-                if user is None:
-                    await message.reply("User not found in voice channel")
-                    return
+            if voice.is_listening():
+                await message.reply("I'm already listening")
+                return
             reply = await message.channel.send(embed=discord.Embed(title="Abbas Baszir voice test",
                                                                    colour=0x5865F2,
-                                                                   description=f"Current status: Listening to *{user.display_name}* in **{voice.channel.name}**")
+                                                                   description=f"Current status: Listening in **{voice.channel.name}**")
                                                                    .set_footer(text="wiger3/abbas"))
             voice.msg = reply
-            voice.listen(Sink(user))
+            voice.listen(voice_recv.sinks.SilenceGeneratorSink(Sink()))
         case 'stop':
             if not voice or not voice.is_connected():
                 await message.reply("I am not in a voice channel")
@@ -154,21 +184,24 @@ class ChunkedPCMAudio(discord.AudioSource):
         self.loop.stop()
 
 class Sink(voice_recv.AudioSink):
-    def __init__(self, user: discord.User | discord.Member):
+    def __init__(self):
         super().__init__()
-        self.user = user
+        self.started_at = time.time()
         self.last_packet = 0
-        self.buf = b''
+        self.buf: dict[bytes] = {}
         self.msg: discord.Message = None
         threading.Thread(target=self.kill_listener).start()
-        print(f"Listening to {self.user.display_name}")
+        print(f"Listening")
     
     def write(self, user: discord.Member | discord.User | None, data: voice_recv.VoiceData):
         if self.msg is None:
             self.msg = self.voice_client.msg
-        if user == self.user:
-            self.buf += data.pcm
-            self.last_packet = time.time()
+        if user:
+            if not user.id in self.buf:
+                self.buf[user.id] = b''
+            self.buf[user.id] += data.pcm
+            if data.pcm != SILENCE_PCM:
+                self.last_packet = time.time()
     
     def kill_listener(self):
         while self.last_packet == 0 or time.time() - self.last_packet < 1:
@@ -179,11 +212,12 @@ class Sink(voice_recv.AudioSink):
                 return
             if not self.voice_client.is_listening():
                 return
-        print(f"Stopping listening to {self.user.display_name}")
+            if time.time() - self.started_at > 15:
+                break
+        print(f"Stopping listening")
         vc = self.voice_client
-        self.msg.embeds[0].description = "Current status: Recognizing speech"
-        asyncio.run_coroutine_threadsafe(self.msg.edit(embeds=self.msg.embeds), self.client.loop)
-        vc.stop_listening(self.user, self.buf)
+        vc.update_embed("Recognizing speech")
+        vc.stop_listening(self.buf)
     
     def cleanup(self):
         pass

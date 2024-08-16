@@ -50,7 +50,10 @@ async def listen(audio: bytes) -> str:
         prediction.cancel()
     if prediction.status != "succeeded":
         return None
-    return prediction.output['transcription']
+    result = prediction.output['transcription']
+    if result.strip() == 'Dziękuję.': # whisper hallucination
+        result = ''
+    return result
 
 
 async def speak(text: str) -> AsyncGenerator[bytes, None]:
