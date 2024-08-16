@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import asyncio
 import threading
@@ -34,7 +35,6 @@ class VoiceClient(voice_recv.VoiceRecvClient):
                     t.append(tg.create_task(abbas.voice.listen(buf)))
             return dict(zip(bufs.keys(), [x.result() for x in t]))
         text: dict = asyncio.run_coroutine_threadsafe(tasks(), loop).result()
-        print(text)
         if list(text.values()).count(None) == len(text):
             print("Responding with timeout embed")
             e_type = "Whisper timeout for all speakers"
@@ -60,9 +60,7 @@ class VoiceClient(voice_recv.VoiceRecvClient):
         print(detected)
         self.update_embed("Generating response",
                           field=("Detected text", f"```{detected}```"))
-        print(self.messages)
         input, text = asyncio.run_coroutine_threadsafe(abbas.generate_response(self.messages[::-1]), loop).result()
-        print(input)
         if isinstance(text, replicate.exceptions.ReplicateException):
             print("Responding with exception embed")
             e_type = "Unknown exception"
@@ -195,7 +193,15 @@ async def on_message(message: discord.Message):
                 await message.reply("I am not in a voice channel")
                 return
             convo = "\n".join(f"```{x.sender}: {x.text}```" for x in voice.messages)
-            await message.channel.send(embed=discord.Embed(title="Current conversation", description=f"{convo}"))
+            if len(convo) > 4090:
+                embeds = []
+                title = "Current conversation"
+                for chunk in [x[0] for x in re.findall(r'(.{1,4000})(\n|$)', convo, re.S)]:
+                    embeds.append(discord.Embed(title=title, description=chunk))
+                    title = None
+                await message.channel.send(embeds=embeds)
+                return
+            await message.channel.send(embed=discord.Embed(title="Current conversation", description=convo))
 
 class ChunkedPCMAudio(discord.AudioSource):
     FRAME_SIZE = discord.opus.Decoder.FRAME_SIZE
