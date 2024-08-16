@@ -14,10 +14,12 @@ from abbas.message import Message
 class VoiceClient(voice_recv.VoiceRecvClient):
     def __init__(self, client: discord.Client, channel: discord.abc.Connectable):
         super().__init__(client, channel)
+        self.ready = False
         self.msg: discord.Message = None
         self.messages: list[Message] = []
     
     def stop_listening(self, bufs: dict[bytes] = None):
+        print(f"Stopping listening")
         super().stop_listening()
         if bufs is None:
             return
@@ -79,12 +81,26 @@ class VoiceClient(voice_recv.VoiceRecvClient):
         print("Abbas Baszir: " + text)
         self.create_message('assistant', text)
         self.play(ChunkedPCMAudio(text))
+        asyncio.run_coroutine_threadsafe(self.start_listening(self.msg.channel), loop)
+    
+    async def start_listening(self, channel: discord.abc.Messageable):
+        while self.is_playing():
+            await asyncio.sleep(0.25)
+        reply = await channel.send(embed=discord.Embed(title="Abbas Baszir voice test",
+                                                       colour=0x5865F2,
+                                                       description=f"Current status: Listening in **{voice.channel.name}**")
+                                                       .set_footer(text="wiger3/abbas"))
+        self.msg = reply
+        self.listen(voice_recv.sinks.SilenceGeneratorSink(Sink()))
 
     
     def create_message(self, sender: str, text: str):
         if not text or not sender:
             return
-        msg = Message(int(time.time()*1000), self.messages[-1].id if self.messages else None, sender, text)
+        id = int(time.time()*1000) << 6
+        while next((x for x in self.messages if x.id == id), None):
+            id += 1
+        msg = Message(id, self.messages[-1].id if self.messages else None, sender, text)
         self.messages.append(msg)
     
     def update_embed(self, status: str = None, colour: int = None, field: tuple = None):
@@ -129,6 +145,21 @@ async def on_message(message: discord.Message):
             if voice and voice.is_connected():
                 await voice.disconnect()
             voice = await vstate.channel.connect(cls=VoiceClient)
+            try:
+                if os.path.isfile('first_message.txt') and os.path.isfile('first_message.ogg'):
+                    await asyncio.sleep(1)
+                    with open('first_message.txt', 'r', encoding='utf-8') as file:
+                        text = file.read()
+                    source = discord.player.FFmpegOpusAudio('first_message.ogg', codec="copy")
+                    voice.play(source)
+                    while voice.is_playing():
+                        await asyncio.sleep(0.25)
+                    voice.create_message('assistant', text)
+            except OSError:
+                pass
+            voice.ready = True
+            # await message.channel.send("ready")
+            await voice.start_listening(message.channel)
         case 'leave':
             if voice and voice.is_connected():
                 await voice.disconnect()
@@ -143,20 +174,28 @@ async def on_message(message: discord.Message):
             if not voice or not voice.is_connected():
                 await message.reply("I am not in a voice channel")
                 return
+            if not voice.ready:
+                await message.reply("I'm not ready to start listening")
+                return
+            if voice.is_playing():
+                await message.reply("I'm talking, wait until I shut up")
+                return
             if voice.is_listening():
                 await message.reply("I'm already listening")
                 return
-            reply = await message.channel.send(embed=discord.Embed(title="Abbas Baszir voice test",
-                                                                   colour=0x5865F2,
-                                                                   description=f"Current status: Listening in **{voice.channel.name}**")
-                                                                   .set_footer(text="wiger3/abbas"))
-            voice.msg = reply
-            voice.listen(voice_recv.sinks.SilenceGeneratorSink(Sink()))
+            await voice.start_listening(message.channel)
         case 'stop':
             if not voice or not voice.is_connected():
                 await message.reply("I am not in a voice channel")
                 return
             voice.stop()
+            await message.add_reaction('👍')
+        case 'convo':
+            if not voice or not voice.is_connected():
+                await message.reply("I am not in a voice channel")
+                return
+            convo = "\n".join(f"```{x.sender}: {x.text}```" for x in voice.messages)
+            await message.channel.send(embed=discord.Embed(title="Current conversation", description=f"{convo}"))
 
 class ChunkedPCMAudio(discord.AudioSource):
     FRAME_SIZE = discord.opus.Decoder.FRAME_SIZE
@@ -214,7 +253,6 @@ class Sink(voice_recv.AudioSink):
                 return
             if time.time() - self.started_at > 15:
                 break
-        print(f"Stopping listening")
         vc = self.voice_client
         vc.update_embed("Recognizing speech")
         vc.stop_listening(self.buf)

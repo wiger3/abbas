@@ -36,7 +36,7 @@ Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKE
 
 (Optional) Create prompting files for the model:
 1. system_prompt.txt: System prompt that directs the model
-2. first_message.txt: A message that gets appended to the context as an initial message sent by the bot
+2. first_message.ogg and first_message.txt: A message that gets spoken by the bot when it initially connects to the channel and its transcript. The ogg file **must** be Opus encoded.
 3. additional_contexts.json: Additional contexts that get triggered as a message from system when user's message matches the given regex
 ```json
 {

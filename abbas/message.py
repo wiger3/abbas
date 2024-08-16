@@ -5,7 +5,7 @@ class Message:
         self.sender = sender.strip()
         self.text = text.strip()
     def __repr__(self) -> str:
-        return f"<Message id={self.id}, parent={self.parent}, sender={repr(self.sender)}, text={repr(self.text)}>"
+        return f"<Message id={self.id}, parent={self.parent}, sender={self.sender!r}, text={self.text!r}>"
     def __str__(self) -> str:
         return self.text
     def tuple(self):

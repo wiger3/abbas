@@ -166,6 +166,7 @@ cython_debug/
 # Project specific
 system_prompt*.txt
 first_message*.txt
+first_message*.ogg
 additional_contexts*.json
 abbas.bat
 mysql.ini
