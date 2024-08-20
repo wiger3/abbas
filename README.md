@@ -31,8 +31,14 @@ Invoke-WebRequest $PRESIGNED_URL.replace('*', '70b_instruction_tuned/tokenizer.m
 Get the following API keys:
 1. Replicate: Make an account, set up billing, and go to https://replicate.com/account/api-tokens
 2. Discord: Go to https://discord.com/developers/applications, make a new application, go to the Bot tab and click "Reset Token"
+3. ElevenLabs: Create an account and in the lower left corner click on your account, then "API Keys".
 
-Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKEN`.
+Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKEN`, `ELEVEN_API_KEY`.
+
+(Optional) If you want to run Whisper (speech recognition) locally on your own GPU instead of Replicate (to avoid their random queue times):
+1. Download `faster-whisper` with `pip install faster-whisper`
+2. Download [CUDA 12](https://developer.nvidia.com/cuda-download) and cuDNN 8 for CUDA 12 ([Windows](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-8.9.7.29_cuda12-archive.zip), [Linux](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz))
+3. Set environment variable `LOCAL_WHISPER` to any value
 
 (Optional) Create prompting files for the model:
 1. system_prompt.txt: System prompt that directs the model
@@ -56,4 +62,4 @@ Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKE
 Run with `python3 bot.py`
 
 ---
-Built with [Discord.py](https://github.com/Rapptz/discord.py), [Replicate](https://replicate.com), [Llama3](https://llama.meta.com/llama3/)
+Built with [Discord.py](https://github.com/Rapptz/discord.py), [Replicate](https://replicate.com), [Llama3](https://llama.meta.com/llama3/), [Whisper](https://openai.com/index/whisper), [ElevenLabs](https://elevenlabs.io)

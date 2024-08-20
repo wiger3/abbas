@@ -20,12 +20,11 @@ class VoiceClient(voice_recv.VoiceRecvClient):
         self.messages: list[Message] = []
     
     def stop_listening(self, bufs: dict[bytes] = None):
-        print(f"Stopping listening")
+        if self.is_listening():
+            print(f"Stopping listening")
         super().stop_listening()
         if bufs is None:
             return
-        def user(id: int):
-            return next((x for x in self.channel.members if x.id == id), None)
         started_at = time.time()
         loop = self.client.loop
         async def tasks():
@@ -34,23 +33,23 @@ class VoiceClient(voice_recv.VoiceRecvClient):
                 for buf in bufs.values():
                     t.append(tg.create_task(abbas.voice.listen(buf)))
             return dict(zip(bufs.keys(), [x.result() for x in t]))
-        text: dict = asyncio.run_coroutine_threadsafe(tasks(), loop).result()
-        if list(text.values()).count(None) == len(text):
+        transcriptions: dict[discord.User|discord.Member, str] = asyncio.run_coroutine_threadsafe(tasks(), loop).result()
+        if list(transcriptions.values()).count(None) == len(transcriptions):
             print("Responding with timeout embed")
             e_type = "Whisper timeout for all speakers"
             self.update_embed("Error \u26a0\ufe0f",
                               colour=0xED4245,
                               field=("Wystąpił błąd", "Podczas odpowiadania wystąpił następujący błąd: " + e_type))
             return
-        elif None in text.values():
-            self.update_embed(field=("Wystąpił błąd", f"Some speech recognitions failed: {", ".join([user(x).display_name for x in text if text[x] is None])}"))
+        elif None in transcriptions.values():
+            self.update_embed(field=("Wystąpił błąd", f"Some speech recognitions failed: {", ".join([user.display_name for user in transcriptions if transcriptions[user] is None])}"))
                 
         detected = []
-        for k, v in text.items():
-            if v is None or v == '':
+        for user, text in transcriptions.items():
+            if text is None or text == '':
                 continue
-            self.create_message(user(k).display_name, v)
-            detected.append(f"{user(k).display_name}: {v}")
+            self.create_message(user.display_name, text)
+            detected.append(f"{user.display_name}: {text}")
         if not detected:
             self.update_embed("Error \u26a0\ufe0f",
                               colour=0xED4245,
@@ -170,11 +169,14 @@ async def on_message(message: discord.Message):
             except OSError:
                 pass
             voice.ready = True
-            # await message.channel.send("ready")
             await voice.start_listening(message.channel)
         case 'leave':
             if voice and voice.is_connected():
                 await voice.disconnect()
+        case 'clear':
+            if voice and voice.is_connected():
+                voice.messages = []
+                await message.add_reaction('👍')
         case 'say':
             if not voice or not voice.is_connected():
                 await message.reply("I am not in a voice channel")
@@ -256,9 +258,9 @@ class Sink(voice_recv.AudioSink):
         if self.msg is None:
             self.msg = self.voice_client.msg
         if user:
-            if not user.id in self.buf:
-                self.buf[user.id] = b''
-            self.buf[user.id] += data.pcm
+            if not user in self.buf:
+                self.buf[user] = b''
+            self.buf[user] += data.pcm
             if data.pcm != SILENCE_PCM:
                 self.last_packet = time.time()
     

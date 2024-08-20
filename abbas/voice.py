@@ -1,10 +1,21 @@
+import os
 import base64
 import asyncio
 import subprocess
-import replicate
 import elevenlabs
 from elevenlabs.client import AsyncElevenLabs
 from typing import AsyncGenerator, AsyncIterator
+
+local_whisper = 'LOCAL_WHISPER' in os.environ
+if local_whisper:
+    import io
+    import wave
+    from time import time
+    from faster_whisper import WhisperModel
+    whisper = WhisperModel("large-v3", device="cuda", compute_type="float16")
+    print("Initialized local Whisper model")
+else:
+    import replicate
 
 voice_abbas = elevenlabs.Voice(
     voice_id='pNInz6obpgDQGcFmaJgB',
@@ -13,45 +24,63 @@ voice_abbas = elevenlabs.Voice(
 )
 
 async def listen(audio: bytes) -> str:
-    duration = len(audio) / 48000 / 8 * 2 + 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels] + [2 seconds leeway]
-    if duration < 6:
-        duration = 6
-    command = "ffmpeg -c:a pcm_s16le -f s16le -ar 48000 -ac 2 -i pipe: -f mp3 pipe:".split(' ')
-    ffmpeg = subprocess.Popen(
-        command,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    mp3, fferror = ffmpeg.communicate(audio)
-    if ffmpeg.returncode != 0 or len(mp3) == 0:
-        raise RuntimeError(f"FFmpeg failed! ({ffmpeg.returncode})\n{fferror.decode()}")
-    
     # send audio to whisper
     print("starting openai whisper")
-    model = await replicate.models.async_get('openai/whisper')
-    data = base64.b64encode(mp3).decode('utf-8')
-    audio = f"data:application/octet-stream;base64,{data}"
-    input = {
-        "model": "large-v3",
-        "language": "pl",
-        "translate": False,
-        "audio": audio
-    }
-    prediction = await replicate.predictions.async_create(
-        model.latest_version,
-        input=input
-    )
-    try:
-        async with asyncio.timeout(duration):
-            await prediction.async_wait()
-    except TimeoutError:
-        print(f"ERROR: Whisper timed out ({duration} seconds)")
-        prediction.cancel()
-    if prediction.status != "succeeded":
-        return None
-    result = prediction.output['transcription']
-    if result.strip() == 'Dziękuję.': # whisper hallucination
+    duration = len(audio) / 48000 / 8 * 2 + 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels] + [2 seconds leeway]
+    if local_whisper:
+        whisper_start = time()
+        audioio = io.BytesIO()
+        wav: wave.Wave_write = wave.open(audioio, 'wb')
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(48000)
+        wav.writeframes(audio)
+        wav.close()
+        audioio.seek(0)
+        segments, info = whisper.transcribe(audioio, language='pl')
+        result = "".join(x.text for x in segments)
+        whisper_end = time()
+        print(f"Whisper took {whisper_end-whisper_start:.2f}s to transcribe {duration:.2f}s of audio")
+    else:
+        if duration < 6:
+            duration = 6
+        
+        # compress audio to mp3 for upload
+        command = "ffmpeg -c:a pcm_s16le -f s16le -ar 48000 -ac 2 -i pipe: -f mp3 pipe:".split(' ')
+        ffmpeg = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        mp3, fferror = ffmpeg.communicate(audio)
+        if ffmpeg.returncode != 0 or len(mp3) == 0:
+            raise RuntimeError(f"FFmpeg failed! ({ffmpeg.returncode})\n{fferror.decode()}")
+        
+        # send mp3 to replicate
+        model = await replicate.models.async_get('openai/whisper')
+        data = base64.b64encode(mp3).decode('utf-8')
+        audio = f"data:application/octet-stream;base64,{data}"
+        input = {
+            "model": "large-v3",
+            "language": "pl",
+            "translate": False,
+            "audio": audio
+        }
+        prediction = await replicate.predictions.async_create(
+            model.latest_version,
+            input=input
+        )
+        try:
+            async with asyncio.timeout(duration):
+                await prediction.async_wait()
+        except TimeoutError:
+            print(f"ERROR: Whisper timed out ({duration} seconds)")
+            prediction.cancel()
+        if prediction.status != "succeeded":
+            return None
+        result = prediction.output['transcription']
+    if result.strip()[:-1] in ('Dziękuję', 'Dziękuje', 'Dziękuję za oglądanie', 'Dziękuje za oglądanie', 'Dzięki', 'Dzięki za oglądanie'): # whisper hallucination
         result = ''
     return result
 
