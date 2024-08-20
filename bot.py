@@ -136,13 +136,27 @@ async def on_message(message: discord.Message):
 
     match cmd:
         case 'join':
-            vstate = message.author.voice
-            if vstate is None or vstate.channel is None:
-                await message.reply("You are not in a voice channel!")
-                return
-            if voice and voice.is_connected():
-                await voice.disconnect()
-            voice = await vstate.channel.connect(cls=VoiceClient)
+            channel = None
+            if len(args) > 1:
+                channel = client.get_channel(int(args[1]))
+                if channel is None:
+                    await message.reply("Channel not found")
+                    return
+                if not isinstance(channel, discord.channel.VocalGuildChannel):
+                    await message.reply("Not a voice channel")
+                    return
+            else:
+                if isinstance(message.author, discord.User) or message.guild is None:
+                    await message.reply("Only available in servers")
+                    return
+                vstate = message.author.voice
+                if vstate is None or vstate.channel is None:
+                    await message.reply("You are not in a voice channel!")
+                    return
+                channel = vstate.channel
+                if voice and voice.is_connected():
+                    await voice.disconnect()
+            voice = await channel.connect(cls=VoiceClient)
             try:
                 if os.path.isfile('first_message.txt') and os.path.isfile('first_message.ogg'):
                     await asyncio.sleep(1)
