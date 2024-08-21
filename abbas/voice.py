@@ -20,7 +20,7 @@ else:
 voice_abbas = elevenlabs.Voice(
     voice_id='pNInz6obpgDQGcFmaJgB',
     name='Adam',
-    settings=elevenlabs.VoiceSettings(stability=0, similarity_boost=0, style=1, use_speaker_boost=True)
+    settings=elevenlabs.VoiceSettings(stability=0, similarity_boost=0)
 )
 
 async def listen(audio: bytes) -> str:
@@ -95,7 +95,7 @@ async def speak(text: str) -> AsyncGenerator[bytes, None]:
     client = AsyncElevenLabs()
     audio_stream = await client.generate(
         text=text,
-        model="eleven_multilingual_v2",
+        model="eleven_turbo_v2_5",
         voice=voice_abbas,
         stream=True
     )
