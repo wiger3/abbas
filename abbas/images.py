@@ -8,6 +8,7 @@ import httpx
 from PIL import Image
 import replicate
 
+MAX_SIZE = 512
 tenor_apikey = os.getenv('TENOR_APIKEY')
 
 if os.path.isdir('tmp'):
@@ -17,7 +18,7 @@ if os.path.isdir('tmp'):
 async def interrogate_clip(url: str, remove_files: bool = True) -> str:
     """
     Describes an image using CLIP
-    This routine downloads the image from the internet, converts it to 512p JPEG, and then sends to a CLIP interrogator.
+    This routine downloads the image from the internet, scales it down to MAX_SIZE, converts it to JPEG, and then sends to a CLIP interrogator.
 
     Args:
         url: URL for the image. It will be downloaded and processed. Supports Tenor links
@@ -42,19 +43,19 @@ async def interrogate_clip(url: str, remove_files: bool = True) -> str:
     with open(filename, 'wb') as file:
         file.write(r.content)
     
-    # convert the image to 512 jpg
+    # convert the image to MAX_SIZE jpg
     orig_file = filename
     im = Image.open(filename)
     if im.mode != 'RGB':
         im = im.convert("RGB")
-    if any(a > 512 for a in im.size):
+    if any(a > MAX_SIZE for a in im.size):
         x, y = im.size
         if x > y:
-            y = int(y*512/x)
-            x = 512
+            y = int(y*MAX_SIZE/x)
+            x = MAX_SIZE
         else:
-            x = int(x*512/y)
-            y = 512
+            x = int(x*MAX_SIZE/y)
+            y = MAX_SIZE
         im = im.resize((x, y))
     filename = os.path.splitext(filename)[0] + ".jpg"
     if remove_files and orig_file != filename:
