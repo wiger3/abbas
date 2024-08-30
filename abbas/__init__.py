@@ -46,6 +46,8 @@ async def generate_response(messages: list[Message]) -> tuple[dict, str]:
     suffix = f"<|start_header_id|>assistant<|end_header_id|>\n\n"
     prompt = ''
     for msg in messages:
+        if not msg.text:
+            continue
         text = f"<|start_header_id|>{msg.sender}<|end_header_id|>\n\n{msg.text}<|eot_id|>"
         if msg.sender != 'assistant':
             for context in additional_contexts:

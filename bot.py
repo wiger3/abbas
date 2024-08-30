@@ -1,7 +1,9 @@
 import os
 import re
+import contextlib
 from urllib.parse import urlparse
 import discord
+import discord.app_commands
 import abbas
 from abbas.images import interrogate_clip
 import abbas.mysql
@@ -15,35 +17,42 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 cache: dict[int, Message] = {}
+last_message: dict[int, int] = {}
 
 client = discord.Client(intents=intents)
+tree = discord.app_commands.CommandTree(client)
 
 @client.event
 async def on_ready():
     await abbas.mysql.connect()
+    await tree.sync()
     await client.change_presence(activity=discord.CustomActivity(name="Bogaty szejk"))
     print(f"Abbas Baszir working as {client.user}")
 
 @client.event
 async def on_message(message: discord.Message):
+    if message.author == client.user:
+        return
     if not client.user in message.mentions:
         return
     print(f"@{message.author.display_name}: {message.clean_content}")
-                
-    async with message.channel.typing():
-        reply: Optional[discord.Message] = None
-        if not message.reference and message.clean_content == f"@{message.mentions[0].display_name}":
-            if os.path.isfile('first_message.txt'):
-                try:
-                    with open('first_message.txt', 'r', encoding='utf-8') as file:
-                        text = file.read()
-                    reply = await message.reply(text)
-                    msg = Message(reply.id, None, 'assistant', text)
-                    await abbas.mysql.insert_message(msg)
-                    cache[reply.id] = msg
-                    return
-                except OSError:
-                    pass
+    if not message.reference and message.clean_content == f"@{message.mentions[0].display_name}":
+        if os.path.isfile('first_message.txt'):
+            try:
+                with open('first_message.txt', 'r', encoding='utf-8') as file:
+                    text = file.read()
+                reply = await message.reply(text)
+                msg = Message(reply.id, None, 'assistant', text)
+                await abbas.mysql.insert_message(msg)
+                cache[reply.id] = msg
+                return
+            except OSError:
+                pass
+    await respond(message)
+
+async def respond(message: discord.Message, *, interaction: Optional[discord.Interaction] = None):
+    context = message.channel.typing() if interaction is None else contextlib.nullcontext()
+    async with context:
         messages = await create_message_list(message)
         print(f"Conversation length for {message.author.display_name}: {len(messages)}")
         latest = message.clean_content
@@ -88,19 +97,43 @@ async def on_message(message: discord.Message):
             e_type = text.type
         elif isinstance(text, replicate.exceptions.ModelError):
             e_type = "Prediction failed, please try again"
-        await message.reply(embed=discord.Embed(
-            title="Wystąpił błąd",
-            description="Podczas odpowiadania wystąpił następujący błąd: " + e_type
-        ), view=ExceptView(message))
+        embed = discord.Embed(
+                title="Wystąpił błąd",
+                description="Podczas odpowiadania wystąpił następujący błąd: " + e_type
+            )
+        if interaction is not None:
+            await interaction.followup.send(embed=embed, view=ExceptView(message))
+        else:
+            await message.reply(embed=embed, view=ExceptView(message))
         return
     print("Abbas Baszir: " + text)
-    if reply is None:
-        reply = await message.reply(text)
-        msg = Message(reply.id, message.id, 'assistant', text)
-        await abbas.mysql.insert_message(msg)
-        cache[reply.id] = msg
+    if interaction is not None:
+        reply = await interaction.followup.send(text)
     else:
-        await reply.edit(content=text)
+        reply = await message.reply(text)
+    msg = Message(reply.id, message.id, 'assistant', text)
+    await abbas.mysql.insert_message(msg)
+    cache[reply.id] = msg
+    last_message[reply.channel.id] = reply.id
+
+@tree.command(name="continue")
+@discord.app_commands.describe(message="ID of message to continue from, defaults to last message sent by bot in the channel")
+async def cmd_continue(interaction: discord.Interaction, message: Optional[str]):
+    """Continue bot's turn"""
+    await interaction.response.defer(thinking=True)
+    channel = interaction.channel
+    if message:
+        last = await get_message(channel, int(message))
+    else:
+        if not channel.id in last_message:
+            await interaction.followup.send(embed=discord.Embed(
+                title="Couldn't find a conversation to continue",
+                description="Try providing the `message` command argument"
+            ))
+            return
+        last = await get_message(channel, last_message[channel.id])
+    await respond(last, interaction=interaction)
+
 
 class ExceptView(discord.ui.View):
     def __init__(self, message: discord.Message):
@@ -112,6 +145,13 @@ class ExceptView(discord.ui.View):
         await interaction.response.pong()
         await on_message(self.message)
 
+async def get_message(channel: discord.abc.Messageable | int, message_id: int):
+    msg = client._get_state()._get_message(message_id)
+    if msg is None:
+        if not isinstance(channel, discord.abc.Messageable):
+            channel = client.get_channel(channel) or await client.fetch_channel(channel)
+        msg = await channel.fetch_message(message_id)
+    return msg
 
 async def create_message_list(message: discord.Message) -> list[Message]:
     """
