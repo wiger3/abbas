@@ -164,6 +164,7 @@ cython_debug/
 
 
 # Project specific
+config.json
 system_prompt*.txt
 first_message*.txt
 additional_contexts*.json

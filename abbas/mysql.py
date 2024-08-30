@@ -1,4 +1,5 @@
 import mysql.connector.aio as mysql
+from .config import config
 from .message import Message
 
 db, cur = None, None
@@ -7,12 +8,7 @@ async def connect():
     Connect to the MySQL database. Must be used before any other functions.
     """
     global db, cur
-    sql_auth = {}
-    with open('mysql.ini', 'r', encoding='utf-8') as file:
-        a = []
-        for line in file:
-            a.append(line.strip('\n').split('=', 1))
-        sql_auth = dict(a)
+    sql_auth = config.mysql
     db = await mysql.connect(**sql_auth)
     print(f"MySQL connected to {db.user}@{db.server_host}")
     cur = await db.cursor()

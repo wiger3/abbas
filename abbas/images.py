@@ -7,8 +7,10 @@ from urllib.parse import urlparse
 import httpx
 from PIL import Image
 import replicate
+from .config import config
 
-MAX_SIZE = 512
+MAX_SIZE = config.clip_max_size or 512
+CLIP_TIMEOUT = config.clip_timeout or 10
 tenor_apikey = os.getenv('TENOR_APIKEY')
 
 if os.path.isdir('tmp'):
@@ -82,10 +84,10 @@ async def interrogate_clip(url: str, remove_files: bool = True) -> str:
         input=input
     )
     try:
-        async with asyncio.timeout(10):
+        async with asyncio.timeout(CLIP_TIMEOUT):
             await prediction.async_wait()
     except TimeoutError:
-        print("ERROR: CLIP timed out (10 seconds)")
+        print(f"ERROR: CLIP timed out ({CLIP_TIMEOUT} seconds)")
         prediction.cancel()
     if prediction.status != "succeeded":
         return None
