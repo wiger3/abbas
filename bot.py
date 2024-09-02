@@ -5,6 +5,7 @@ import asyncio
 import threading
 import time
 import discord
+import discord.app_commands
 from discord.ext import voice_recv
 from discord.ext.voice_recv.silence import SILENCE_PCM
 import replicate.exceptions
@@ -117,9 +118,11 @@ intents.message_content = True
 voice: VoiceClient = None
 
 client = discord.Client(intents=intents)
+tree = discord.app_commands.CommandTree(client)
 
 @client.event
 async def on_ready():
+    await tree.sync()
     await client.change_presence(activity=discord.CustomActivity(name="\ud83c\udf99\ufe0f Voice test"))
     print(f"Abbas Baszir working as {client.user}")
 

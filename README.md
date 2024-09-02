@@ -13,7 +13,7 @@ Linux: Download using your package manager \
 (Optional) `voice.py` demo requires mpv.
 
 Download the Llama3 tokenizer from Meta:
-1. Go to [Request access to Meta Llama](https://llama.meta.com/llama-downloads) and fill in your details
+1. Go to [Request access to Meta Llama](https://llama.meta.com/llama-downloads) and fill in your details (Select Llama 3 from previous models)
 2. Copy the download link you received
 3. Run the following commands in your terminal:
 ```bash
@@ -39,6 +39,15 @@ Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKE
 1. Download `faster-whisper` with `pip install faster-whisper`
 2. Download [CUDA 12](https://developer.nvidia.com/cuda-download) and cuDNN 8 for CUDA 12 ([Windows](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-8.9.7.29_cuda12-archive.zip), [Linux](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz))
 3. Set environment variable `LOCAL_WHISPER` to any value
+
+Fill out config.json:
+```yaml
+context_length: max conversation token length to send to the model (default: 2000)
+clip_max_size: maximum length of the longest side of the image when scaling for sending to CLIP (default: 512)
+clip_timeout: amount of seconds to wait for CLIP interrogator response from Replicate (default: 10)
+mysql: authentication details for mysql server
+heating: increase generation temperature the longer a conversation is going on. Higher temperature makes the model output more gibberish. This option exists because it's funny (default: false)
+```
 
 (Optional) Create prompting files for the model:
 1. system_prompt.txt: System prompt that directs the model

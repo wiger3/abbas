@@ -6,11 +6,12 @@ import asyncio
 import replicate
 from replicate.exceptions import ReplicateError, ModelError
 from llama.tokenizer import Tokenizer
+from .config import config
 from .message import Message
 
 tt = Tokenizer('llama/tokenizer.model')
 
-context_length = 2000
+context_length = config.context_length or 2000
 system_prompt = "Jesteś bogaty szejk Abbas Baszir."
 additional_contexts = []
 
@@ -45,6 +46,8 @@ async def generate_response(messages: list[Message]) -> tuple[dict, str]:
     suffix = f"<|start_header_id|>assistant<|end_header_id|>\n\n"
     prompt = ''
     for msg in messages:
+        if not msg.text:
+            continue
         text = f"<|start_header_id|>{msg.sender}<|end_header_id|>\n\n{msg.text}<|eot_id|>"
         if msg.sender != 'assistant':
             for context in additional_contexts:
@@ -59,14 +62,16 @@ async def generate_response(messages: list[Message]) -> tuple[dict, str]:
         prompt = text + prompt
     prompt = f"{prefix}{prompt}{suffix}"
 
-    zaposciewanie: bool = is_zaposciany(messages)
-
+    zaposciewanie = False
     temperature = 0.81
-    for x in messages[1:]:
-        if x.sender == 'assistant':
-            temperature = heat_up(temperature, 0.01, 0.02)
-    if zaposciewanie:
-        temperature = heat_up(temperature, 0.1, 0.2, cap=9)
+    if config.heating:
+        zaposciewanie: bool = is_zaposciany(messages)
+        temperature = 0.81
+        for x in messages[1:]:
+            if x.sender == 'assistant':
+                temperature = heat_up(temperature, 0.01, 0.02)
+        if zaposciewanie:
+            temperature = heat_up(temperature, 0.1, 0.2, cap=9)
     input = {
         "prompt": prompt,
         "prompt_template": "{prompt}",
