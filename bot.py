@@ -8,6 +8,7 @@ import abbas
 from abbas.images import interrogate_clip
 import abbas.mysql
 from abbas.message import Message
+from abbas.config import config
 import replicate.exceptions
 from typing import Optional
 
@@ -26,7 +27,7 @@ tree = discord.app_commands.CommandTree(client)
 async def on_ready():
     await abbas.mysql.connect()
     await tree.sync()
-    await client.change_presence(activity=discord.CustomActivity(name="Bogaty szejk"))
+    await client.change_presence(activity=discord.CustomActivity(name=config.custom_status))
     print(f"Abbas Baszir working as {client.user}")
 
 @client.event

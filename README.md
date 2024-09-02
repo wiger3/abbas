@@ -35,6 +35,7 @@ Get a MySQL server and import the abbas.sql file.
 
 Fill out config.json:
 ```yaml
+custom_status: Status displayed by the bot on Discord (default: Bogaty szejk)
 context_length: max conversation token length to send to the model (default: 2000)
 clip_max_size: maximum length of the longest side of the image when scaling for sending to CLIP (default: 512)
 clip_timeout: amount of seconds to wait for CLIP interrogator response from Replicate (default: 10)

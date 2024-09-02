@@ -1,4 +1,5 @@
 {
+    "custom_status": "Bogaty szejk",
     "context_length": 2000,
     "clip_max_size": 512,
     "clip_timeout": 10,
