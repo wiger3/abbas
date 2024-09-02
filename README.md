@@ -38,15 +38,13 @@ Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKE
 (Optional) If you want to run Whisper (speech recognition) locally on your own GPU instead of Replicate (to avoid their random queue times):
 1. Download `faster-whisper` with `pip install faster-whisper`
 2. Download [CUDA 12](https://developer.nvidia.com/cuda-download) and cuDNN 8 for CUDA 12 ([Windows](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-8.9.7.29_cuda12-archive.zip), [Linux](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz))
-3. Set environment variable `LOCAL_WHISPER` to any value
+3. Set `whisper_source` in config to `cuda`
 
 Fill out config.json:
 ```yaml
 context_length: max conversation token length to send to the model (default: 2000)
-clip_max_size: maximum length of the longest side of the image when scaling for sending to CLIP (default: 512)
-clip_timeout: amount of seconds to wait for CLIP interrogator response from Replicate (default: 10)
-mysql: authentication details for mysql server
 heating: increase generation temperature the longer a conversation is going on. Higher temperature makes the model output more gibberish. This option exists because it's funny (default: false)
+whisper_source: what to use for Whisper inference, values other than "replicate" will assume local installation and will be passed as device to PyTorch (default: replicate)
 ```
 
 (Optional) Create prompting files for the model:

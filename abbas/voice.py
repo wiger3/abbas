@@ -5,14 +5,15 @@ import subprocess
 import elevenlabs
 from elevenlabs.client import AsyncElevenLabs
 from typing import AsyncGenerator, AsyncIterator
+from .config import config
 
-local_whisper = 'LOCAL_WHISPER' in os.environ
+local_whisper = (config.whisper_source is not None and config.whisper_source != "replicate") or False
 if local_whisper:
     import io
     import wave
     from time import time
     from faster_whisper import WhisperModel
-    whisper = WhisperModel("large-v3", device="cuda", compute_type="float16")
+    whisper = WhisperModel("large-v3", device=config.whisper_source, compute_type="float16")
     print("Initialized local Whisper model")
 else:
     import replicate

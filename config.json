@@ -1,4 +1,5 @@
 {
     "context_length": 2000,
-    "heating": false
+    "heating": false,
+    "whisper_source": "replicate"
 }
