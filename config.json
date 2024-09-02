@@ -1,4 +1,5 @@
 {
+    "custom_status": "\ud83c\udf99\ufe0f Voice test",
     "context_length": 2000,
     "heating": false,
     "whisper_source": "replicate"

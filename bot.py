@@ -12,6 +12,7 @@ import replicate.exceptions
 import abbas
 import abbas.voice
 from abbas.message import Message
+from abbas.config import config
 
 class VoiceClient(voice_recv.VoiceRecvClient):
     def __init__(self, client: discord.Client, channel: discord.abc.Connectable):
@@ -123,7 +124,7 @@ tree = discord.app_commands.CommandTree(client)
 @client.event
 async def on_ready():
     await tree.sync()
-    await client.change_presence(activity=discord.CustomActivity(name="\ud83c\udf99\ufe0f Voice test"))
+    await client.change_presence(activity=discord.CustomActivity(name=config.custom_status))
     print(f"Abbas Baszir working as {client.user}")
 
 @client.event
