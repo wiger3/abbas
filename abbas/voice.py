@@ -28,17 +28,19 @@ async def listen(audio: bytes) -> str:
     print("starting openai whisper")
     duration = len(audio) / 48000 / 8 * 2 + 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels] + [2 seconds leeway]
     if local_whisper:
+        def run():
+            audioio = io.BytesIO()
+            wav: wave.Wave_write = wave.open(audioio, 'wb')
+            wav.setnchannels(2)
+            wav.setsampwidth(2)
+            wav.setframerate(48000)
+            wav.writeframes(audio)
+            wav.close()
+            audioio.seek(0)
+            segments, info = whisper.transcribe(audioio, language='pl')
+            return "".join(x.text for x in segments)
         whisper_start = time()
-        audioio = io.BytesIO()
-        wav: wave.Wave_write = wave.open(audioio, 'wb')
-        wav.setnchannels(2)
-        wav.setsampwidth(2)
-        wav.setframerate(48000)
-        wav.writeframes(audio)
-        wav.close()
-        audioio.seek(0)
-        segments, info = whisper.transcribe(audioio, language='pl')
-        result = "".join(x.text for x in segments)
+        result = await asyncio.to_thread(run)
         whisper_end = time()
         print(f"Whisper took {whisper_end-whisper_start:.2f}s to transcribe {duration:.2f}s of audio")
     else:
@@ -81,6 +83,7 @@ async def listen(audio: bytes) -> str:
             return None
         result = prediction.output['transcription']
     if result.strip()[:-1] in ('Dziękuję', 'Dziękuje', 'Dziękuję za oglądanie', 'Dziękuje za oglądanie', 'Dzięki', 'Dzięki za oglądanie'): # whisper hallucination
+        print(f"Discarding hallucination: {result!r}")
         result = ''
     return result
 
