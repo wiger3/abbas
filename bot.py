@@ -25,7 +25,10 @@ tree = discord.app_commands.CommandTree(client)
 
 @client.event
 async def on_ready():
-    await abbas.mysql.connect()
+    try:
+        await abbas.mysql.connect()
+    except:
+        exit(1)
     await tree.sync()
     await client.change_presence(activity=discord.CustomActivity(name=config.custom_status))
     print(f"Abbas Baszir working as {client.user}")
@@ -89,6 +92,8 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
             else:
                 latest += "\n" + img_text
         messages[0].text = latest
+        await abbas.mysql.insert_message(messages[0])
+        cache[message.id] = messages[0]
         response = await abbas.generate_response(messages)
     text: str | replicate.exceptions.ReplicateException = response[1]
     if isinstance(text, replicate.exceptions.ReplicateException):
@@ -179,8 +184,6 @@ async def create_message_list(message: discord.Message) -> list[Message]:
     elif username.lower() == 'assistant' or username.lower() == 'system':
         username = 'user'
     messages = [Message(message.id, ref, username, message.clean_content)]
-    await abbas.mysql.insert_message(messages[0])
-    cache[message.id] = messages[0]
     if not ref:
         return messages
     # Fetch messages from MySQL
@@ -198,7 +201,7 @@ async def create_message_list(message: discord.Message) -> list[Message]:
             elif username.lower() == 'assistant' or username.lower() == 'system':
                 username = 'user'
             messages.append(Message(x.id, ref, username, x.clean_content))
-        await abbas.mysql.insert_messages(messages)
+        await abbas.mysql.insert_messages(messages[:-1])
     
     # Add messages to cache
     for x in messages:
