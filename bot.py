@@ -146,9 +146,9 @@ class ExceptView(discord.ui.View):
         self.message = message
     
     @discord.ui.button(label="Retry", style=discord.ButtonStyle.red)
-    async def retry(self, button: discord.Button, interaction: discord.Interaction):
-        await interaction.response.pong()
-        await on_message(self.message)
+    async def retry(self, interaction: discord.Interaction, button: discord.Button):
+        await interaction.response.defer(thinking=True)
+        await respond(self.message, interaction=interaction)
 
 async def get_message(channel: discord.abc.Messageable | int, message_id: int):
     msg = client._get_state()._get_message(message_id)
