@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import discord
 import discord.app_commands
 import abbas
-from abbas.images import interrogate_clip
+from abbas.images import caption_image
 import abbas.mysql
 from abbas.message import Message
 from abbas.config import config
@@ -78,10 +78,9 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
                 if not discord_authenticated_url:
                     print("ERROR: Failed to fetch authenticated image from Discord. Skipping")
                     continue
-            caption = await interrogate_clip(url)
+            caption = await caption_image(url)
             if caption is None:
                 continue
-            caption = caption.split(',', 1)[0]
             name = uridata.path.split('/')[-1]
             img_text = f"![{caption}]({name})"
             print(img_text)
