@@ -1,5 +1,5 @@
 import os
-import re
+import io
 import time
 import asyncio
 import threading
@@ -212,16 +212,9 @@ async def on_message(message: discord.Message):
             if not voice or not voice.is_connected():
                 await message.reply("I am not in a voice channel")
                 return
-            convo = "\n".join(f"```{x.sender}: {x.text}```" for x in voice.messages)
-            if len(convo) > 4090:
-                embeds = []
-                title = "Current conversation"
-                for chunk in [x[0] for x in re.findall(r'(.{1,4000})(\n|$)', convo, re.S)]:
-                    embeds.append(discord.Embed(title=title, description=chunk))
-                    title = None
-                await message.channel.send(embeds=embeds)
-                return
-            await message.channel.send(embed=discord.Embed(title="Current conversation", description=convo))
+            convo = "\n".join(f"{x.sender}: {x.text}" for x in voice.messages)
+            file = io.BytesIO(convo.encode('utf-8'))
+            await message.reply(file=discord.File(file, f"conversation_{voice.messages[-1].id}.txt"))
 
 class ChunkedPCMAudio(discord.AudioSource):
     FRAME_SIZE = discord.opus.Decoder.FRAME_SIZE
