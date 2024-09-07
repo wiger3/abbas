@@ -24,17 +24,17 @@ voice_abbas = elevenlabs.Voice(
     settings=elevenlabs.VoiceSettings(stability=0, similarity_boost=0)
 )
 
-async def listen(audio: bytes) -> str:
+async def listen(audio: bytes, *, sample_size: int = 48000, channels: int = 2) -> str:
     # send audio to whisper
     print("starting openai whisper")
-    duration = len(audio) / 48000 / 8 * 2 + 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels] + [2 seconds leeway]
+    duration = len(audio) / sample_size / 8 * channels + 2 # [size (in bytes)] / [sample_size] / [8bits] * [channels] + [2 seconds leeway]
     if local_whisper:
         def run():
             audioio = io.BytesIO()
             wav: wave.Wave_write = wave.open(audioio, 'wb')
-            wav.setnchannels(2)
+            wav.setnchannels(channels)
             wav.setsampwidth(2)
-            wav.setframerate(48000)
+            wav.setframerate(sample_size)
             wav.writeframes(audio)
             wav.close()
             audioio.seek(0)
@@ -49,16 +49,7 @@ async def listen(audio: bytes) -> str:
             duration = 6
         
         # compress audio to mp3 for upload
-        command = "ffmpeg -c:a pcm_s16le -f s16le -ar 48000 -ac 2 -i pipe: -f mp3 pipe:".split(' ')
-        ffmpeg = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        mp3, fferror = ffmpeg.communicate(audio)
-        if ffmpeg.returncode != 0 or len(mp3) == 0:
-            raise RuntimeError(f"FFmpeg failed! ({ffmpeg.returncode})\n{fferror.decode()}")
+        mp3 = ffmpeg(f"-c:a pcm_s16le -f s16le -ar {sample_size} -ac {channels}".split(' '), audio, "-f mp3".split(' '))
         
         # send mp3 to replicate
         model = await replicate.models.async_get('openai/whisper')
@@ -89,7 +80,7 @@ async def listen(audio: bytes) -> str:
     return result
 
 
-async def speak(text: str) -> AsyncGenerator[bytes, None]:
+async def speak(text: str, *, sample_size: int = 48000, channels: int = 2) -> AsyncGenerator[bytes, None]:
     """
     Generates audio stream from text using ElevenLabs
 
@@ -107,26 +98,28 @@ async def speak(text: str) -> AsyncGenerator[bytes, None]:
     last = 0
     async for chunk in audio_stream:
         mp3_response += chunk
-        wav = mp3_to_pcm(mp3_response)
+        wav = mp3_to_pcm(mp3_response, sample_size=sample_size, channels=channels)
         yield wav[last:]
         last = len(wav)
-def mp3_to_pcm(audio: bytes) -> bytes:
+def mp3_to_pcm(audio: bytes, *, sample_size: int = 48000, channels: int = 2) -> bytes:
     """
     Converts MP3 to 16bit PCM audio.
 
     This is so the audio can be sent on a Discord voice channel.
     """
-    command = "ffmpeg -i pipe: -c:a pcm_s16le -f s16le -ar 48000 -ac 2 pipe:".split(' ')
-    ffmpeg = subprocess.Popen(
+    return ffmpeg([], audio, f"-c:a pcm_s16le -f s16le -ar {sample_size} -ac {channels}".split(' '))
+def ffmpeg(input_args: list, input: bytes, output_args: list) -> bytes:
+    command = ["ffmpeg"] + input_args + ["-i", "pipe:"] + output_args + ["pipe:"]
+    proc = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
-    pcm, fferror = ffmpeg.communicate(audio)
-    if ffmpeg.returncode != 0 or len(pcm) == 0:
-        raise RuntimeError(f"FFmpeg failed! ({ffmpeg.returncode})\n{fferror.decode()}")
-    return pcm
+    out, fferror = proc.communicate(input)
+    if proc.returncode != 0 or len(out) == 0:
+        raise RuntimeError(f"FFmpeg failed! ({proc.returncode})\n{fferror.decode()}")
+    return out
 
 async def main():
     while True:
