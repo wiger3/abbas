@@ -65,12 +65,14 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
             if x.content_type.startswith("image"):
                 urls.append(x.url)
         for url in urls:
+            image_url = url
             discord_authenticated_url = False
             uridata = urlparse(url)
-            if 'discord' in uridata.hostname and uridata.query == '':
+            if 'discord' in uridata.hostname and (uridata.query == '' or uridata.path.endswith('.gif')):
+                await message.fetch() # refresh auth urls
                 for x in message.embeds:
                     if x.type == 'image':
-                        url = x.thumbnail.url
+                        image_url = x.thumbnail.url
                         discord_authenticated_url = True
                         break
                     else:
@@ -78,14 +80,12 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
                 if not discord_authenticated_url:
                     print("ERROR: Failed to fetch authenticated image from Discord. Skipping")
                     continue
-            caption = await caption_image(url)
+            caption = await caption_image(image_url)
             if caption is None:
                 continue
             name = uridata.path.split('/')[-1]
             img_text = f"![{caption}]({name})"
             print(img_text)
-            if discord_authenticated_url:
-                url = url.split('?', 1)[0]
             if url in latest:
                 latest = latest.replace(url, img_text)
             else:

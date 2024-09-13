@@ -4,6 +4,7 @@
     "clip_source": "replicate",
     "clip_max_size": 512,
     "clip_timeout": 10,
+    "ocr": false,
     "mysql": {
         "host": "",
         "user": "",

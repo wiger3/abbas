@@ -9,6 +9,7 @@ from PIL import Image
 from .config import config
 
 local_blip = (config.clip_source is not None and config.clip_source != "replicate") or False
+ocr = config.ocr or False
 
 if local_blip:
     from torch import float16
@@ -20,6 +21,10 @@ if local_blip:
     print("Initialized local BLIP captioner model")
 else:
     import replicate
+if ocr:
+    import easyocr
+    ocr_reader = easyocr.Reader(['en'])
+    print("Initialized local OCR model")
 
 MAX_SIZE = config.clip_max_size or 512
 CLIP_TIMEOUT = config.clip_timeout or 10
@@ -47,8 +52,15 @@ async def caption_image(url: str) -> str:
     if image is None:
         return None
     
-    image = convert_and_scale(image, MAX_SIZE, 'jpeg')
+    image = convert_and_scale(image, MAX_SIZE, 'bmp' if local_blip else 'jpeg')
     caption = await get_caption(image)
+    if ocr:
+        text = await asyncio.threads.to_thread(get_ocr, image)
+        if text:
+            caption += f", with text saying \"{text}\""
+    
+    if caption.startswith('araf'): # "arafed", captioner halucination
+        caption = caption.split(' ', 1)[1]
     
     return caption
 
@@ -103,11 +115,12 @@ def convert_and_scale(image: bytes, size: int = MAX_SIZE, format: str = "jpeg") 
 async def get_caption(image: bytes) -> str:
     print("starting blip", end='\r')
     if local_blip:
-        im = Image.open(io.BytesIO(image))
-        inputs = blip_processor(im, return_tensors="pt").to(blip_device, float16)
-        tokens = blip_model.generate(**inputs, max_new_tokens=32)
-        caption = blip_processor.decode(tokens[0], skip_special_tokens=True)
-        return caption
+        def run():
+            im = Image.open(io.BytesIO(image))
+            inputs = blip_processor(im, return_tensors="pt").to(blip_device, float16)
+            tokens = blip_model.generate(**inputs, max_new_tokens=32)
+            return blip_processor.decode(tokens[0], skip_special_tokens=True)
+        return await asyncio.threads.to_thread(run)
     else:
         model = await replicate.models.async_get('pharmapsychotic/clip-interrogator')
         data = base64.b64encode(image).decode('utf-8')
@@ -130,6 +143,12 @@ async def get_caption(image: bytes) -> str:
         if prediction.status != "succeeded":
             return None
         return prediction.output.split(',', 1)[0]
+
+def get_ocr(image: bytes) -> str:
+    result: list = ocr_reader.readtext(image)
+    if result:
+        result.sort(key=lambda x: [x[0][0][1], x[0][0][0]]) # sort the text chunks left to right top to bottom
+        return " ".join(x[1].strip() for x in result)
 
 if __name__ == "__main__":
     async def main():

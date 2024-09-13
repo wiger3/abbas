@@ -38,6 +38,11 @@ Get a MySQL server and import the abbas.sql file.
 2. Download HuggingFace Transformers with `pip install transformers`
 3. Set `clip_source` in config to `cuda`
 
+(Optional) Installing OCR (requires GPU):
+1. Download PyTorch if not installed already in the previous step
+2. Download the OCR package with `pip install git+https://github.com/wiger3/EasyOCR`
+3. Set `ocr` in config to `true`
+
 Fill out config.json:
 ```yaml
 custom_status: Status displayed by the bot on Discord (default: Bogaty szejk)
@@ -45,6 +50,7 @@ context_length: max conversation token length to send to the model (default: 200
 clip_source: what to use for BLIP captioning, values other than "replicate" will assume local installation and will be passed as device to PyTorch (default: replicate)
 clip_max_size: maximum length of the longest side of the image when scaling for sending to BLIP captioner (default: 512)
 clip_timeout: amount of seconds to wait for CLIP interrogator response from Replicate (ignored if using local BLIP) (default: 10)
+ocr: whether to use OCR to recognize text in images (default: false)
 mysql: authentication details for mysql server
 heating: increase generation temperature the longer a conversation is going on. Higher temperature makes the model output more gibberish. This option exists because it's funny (default: false)
 ```
