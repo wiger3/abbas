@@ -52,7 +52,7 @@ async def caption_image(url: str) -> str:
     if image is None:
         return None
     
-    image = convert_and_scale(image, MAX_SIZE, 'bmp' if local_blip else 'jpeg')
+    image = convert_and_scale(image)
     caption = await get_caption(image)
     if ocr:
         text = await asyncio.threads.to_thread(get_ocr, image)
@@ -93,7 +93,7 @@ async def download_file(url: str) -> bytes:
         r = await client.get(url)
     return r.content
 
-def convert_and_scale(image: bytes, size: int = MAX_SIZE, format: str = "jpeg") -> bytes:
+def convert_and_scale(image: bytes, size: int = MAX_SIZE, format: str = "png") -> bytes:
     im = Image.open(io.BytesIO(image))
     if im.mode != 'RGB':
         im = im.convert("RGB")
@@ -144,10 +144,18 @@ async def get_caption(image: bytes) -> str:
             return None
         return prediction.output.split(',', 1)[0]
 
-def get_ocr(image: bytes) -> str:
+def avg(*args):
+    return sum(args) / len(args)
+def get_ocr(image: bytes, min_confidence: float = 0.6) -> str:
     result: list = ocr_reader.readtext(image)
     if result:
-        result.sort(key=lambda x: [x[0][0][1], x[0][0][0]]) # sort the text chunks left to right top to bottom
+        result = [x for x in result if x[2] >= min_confidence] # only detections with confidence above 60%
+
+        # sort the text chunks left to right top to bottom
+        # the bounding box coordinates are averaged to find the center, then
+        # divided by 8 to reduce sensitivity to small position variations
+        result.sort(key=lambda x: [avg(*[xy[1] for xy in x[0]])//8, avg(*[xy[0] for xy in x[0]])//8])
+
         return " ".join(x[1].strip() for x in result)
 
 if __name__ == "__main__":
