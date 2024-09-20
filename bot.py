@@ -66,6 +66,7 @@ async def on_message(message: discord.Message):
                 msg = Message(reply.id, None, 'assistant', text)
                 await client.mysql.insert_message(msg)
                 cache[reply.id] = msg
+                last_message[reply.channel.id] = reply.id
                 return
             except OSError:
                 pass
