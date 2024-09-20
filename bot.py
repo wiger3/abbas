@@ -146,7 +146,18 @@ async def cmd_continue(interaction: discord.Interaction, message: Optional[str])
     await interaction.response.defer(thinking=True)
     channel = interaction.channel
     if message:
-        last = await get_message(channel, int(message))
+        if not message.isnumeric():
+            await interaction.followup.send(embed=discord.Embed(
+                title="Invalid message ID"
+            ))
+            return
+        try:
+            last = await get_message(channel, int(message))
+        except discord.HTTPException:
+            await interaction.followup.send(embed=discord.Embed(
+                title="Message not found"
+            ))
+            return
     else:
         if not channel.id in last_message:
             await interaction.followup.send(embed=discord.Embed(
@@ -218,7 +229,7 @@ async def create_message_list(message: discord.Message) -> list[Message]:
             elif username.lower() == 'assistant' or username.lower() == 'system':
                 username = 'user'
             messages.append(Message(x.id, ref, username, x.clean_content))
-        await client.mysql.insert_messages(messages[:-1])
+        await client.mysql.insert_messages(messages[1:])
     
     # Add messages to cache
     for x in messages:
@@ -255,8 +266,6 @@ async def legacy_create_message_tree(message: discord.Message, max_length: int =
             # print(f"Resolved message {ref.message_id} from cache")
             msg = ref.cached_message
         ref = msg.reference
-        if not msg.clean_content:
-            continue
         messages.append(msg)
         max_length -= 1
     return messages
