@@ -45,6 +45,7 @@ Get a MySQL server and import the abbas.sql file.
 
 Fill out config.json:
 ```yaml
+name: Assistant's name, shows up in console (default: Abbas Baszir)
 custom_status: Status displayed by the bot on Discord (default: Bogaty szejk)
 context_length: max conversation token length to send to the model (default: 2000)
 clip_source: what to use for BLIP captioning, values other than "replicate" will assume local installation and will be passed as device to PyTorch (default: replicate)

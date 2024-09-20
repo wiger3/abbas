@@ -27,5 +27,3 @@ class AbbasConfig:
         if 'mysql' in data and 'password' in data['mysql']:
             data['mysql']['password'] = '***'
         return str(data)
-
-config = AbbasConfig('config.json')

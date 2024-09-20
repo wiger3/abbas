@@ -5,14 +5,13 @@ from urllib.parse import urlparse
 import discord
 import discord.app_commands
 import abbas
-from abbas.images import caption_image
-import abbas.mysql
-from abbas.message import Message
-from abbas.config import config
 import replicate.exceptions
 from typing import Optional
 
+Message = abbas.Message
+
 token = os.environ['DISCORD_TOKEN']
+tenor_apikey = os.environ['TENOR_APIKEY']
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -20,18 +19,36 @@ intents.message_content = True
 cache: dict[int, Message] = {}
 last_message: dict[int, int] = {}
 
-client = discord.Client(intents=intents)
+class Abbas(discord.Client):
+    def __init__(self, *, intents: discord.Intents, **options) -> None:
+        super().__init__(intents=intents, **options)
+        self.config = abbas.Config('config.json')
+        self.name = self.config.name or "Abbas Baszir"
+        self.images = abbas.ImagesManager(
+            self.config.clip_source or 'replicate',
+            self.config.clip_timeout or 10,
+            self.config.clip_max_size or 512,
+            self.config.ocr or False,
+            tenor_apikey
+        )
+        self.mysql = abbas.MySQL(**self.config.mysql)
+        self.responder = abbas.ResponseGen(
+            self.config.context_length or 2000,
+            self.config.heating or False
+        )
+
+client = Abbas(intents=intents)
 tree = discord.app_commands.CommandTree(client)
 
 @client.event
 async def on_ready():
     try:
-        await abbas.mysql.connect()
+        await client.mysql.connect()
     except:
         exit(1)
     await tree.sync()
-    await client.change_presence(activity=discord.CustomActivity(name=config.custom_status))
-    print(f"Abbas Baszir working as {client.user}")
+    await client.change_presence(activity=discord.CustomActivity(name=client.config.custom_status))
+    print(f"{client.name} working as {client.user}")
 
 @client.event
 async def on_message(message: discord.Message):
@@ -47,7 +64,7 @@ async def on_message(message: discord.Message):
                     text = file.read()
                 reply = await message.reply(text)
                 msg = Message(reply.id, None, 'assistant', text)
-                await abbas.mysql.insert_message(msg)
+                await client.mysql.insert_message(msg)
                 cache[reply.id] = msg
                 return
             except OSError:
@@ -80,7 +97,7 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
                 if not discord_authenticated_url:
                     print("ERROR: Failed to fetch authenticated image from Discord. Skipping")
                     continue
-            caption = await caption_image(image_url)
+            caption = await client.images.caption_image(image_url)
             if caption is None:
                 continue
             name = uridata.path.split('/')[-1]
@@ -91,9 +108,9 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
             else:
                 latest += "\n" + img_text
         messages[0].text = latest
-        await abbas.mysql.insert_message(messages[0])
+        await client.mysql.insert_message(messages[0])
         cache[message.id] = messages[0]
-        response = await abbas.generate_response(messages)
+        response = await client.responder.generate_response(messages)
     text: str | replicate.exceptions.ReplicateException = response[1]
     if isinstance(text, replicate.exceptions.ReplicateException):
         print("Responding with exception embed")
@@ -111,13 +128,13 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
         else:
             await message.reply(embed=embed, view=ExceptView(message))
         return
-    print("Abbas Baszir: " + text)
+    print(f"{client.name}: {text}")
     if interaction is not None:
         reply = await interaction.followup.send(text)
     else:
         reply = await message.reply(text)
     msg = Message(reply.id, message.id, 'assistant', text)
-    await abbas.mysql.insert_message(msg)
+    await client.mysql.insert_message(msg)
     cache[reply.id] = msg
     last_message[reply.channel.id] = reply.id
 
@@ -186,7 +203,7 @@ async def create_message_list(message: discord.Message) -> list[Message]:
     if not ref:
         return messages
     # Fetch messages from MySQL
-    messages += await abbas.mysql.fetch_message_list(ref)
+    messages += await client.mysql.fetch_message_list(ref)
 
     if len(messages) == 1:
         # Message list not in database. Must be legacy, fetch them from Discord
@@ -200,7 +217,7 @@ async def create_message_list(message: discord.Message) -> list[Message]:
             elif username.lower() == 'assistant' or username.lower() == 'system':
                 username = 'user'
             messages.append(Message(x.id, ref, username, x.clean_content))
-        await abbas.mysql.insert_messages(messages[:-1])
+        await client.mysql.insert_messages(messages[:-1])
     
     # Add messages to cache
     for x in messages:
