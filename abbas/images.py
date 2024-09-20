@@ -79,7 +79,16 @@ class ImagesManager:
             RuntimeError: Couldn't retrieve GIF id from URL
             RuntimeError: Google API response doesn't contain image URL
         """
-        gif_id = url.split('-')[-1]
+        uri = urlparse(url)
+        if not uri.path.startswith('/view/'):
+            if not uri.path.endswith('.gif'):
+                raise RuntimeError(f"Unsupported link type: {url}")
+            async with httpx.AsyncClient() as client:
+                r = await client.head(url)
+            if r.status_code != 301 or not 'location' in r.headers:
+                raise RuntimeError(f"Couldn't find GIF id for Tenor short link: {url}")
+            return await self.parse_tenor(r.headers['location'])
+        gif_id = uri.path.split('-')[-1]
         if not gif_id.isnumeric():
             raise RuntimeError(f"Couldn't find GIF id in URL {url}")
         api = f"https://tenor.googleapis.com/v2/posts?key={self.tenor_apikey}&ids={gif_id}&media_filter=gifpreview"
