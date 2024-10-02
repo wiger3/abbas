@@ -111,30 +111,39 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
         messages[0].text = latest
         await client.mysql.insert_message(messages[0])
         cache[message.id] = messages[0]
-        response = await client.responder.generate_response(messages)
-    text: str | replicate.exceptions.ReplicateException = response[1]
-    if isinstance(text, replicate.exceptions.ReplicateException):
-        print("Responding with exception embed")
-        e_type = "Unknown exception"
-        if isinstance(text, replicate.exceptions.ReplicateError):
-            e_type = text.type
-        elif isinstance(text, replicate.exceptions.ModelError):
-            e_type = "Prediction failed, please try again"
-        embed = discord.Embed(
-                title="Wystąpił błąd",
-                description="Podczas odpowiadania wystąpił następujący błąd: " + e_type
-            )
-        if interaction is not None:
-            await interaction.followup.send(embed=embed, view=ExceptView(message))
-        else:
-            await message.reply(embed=embed, view=ExceptView(message))
-        return
+        try:
+            response = await client.responder.generate_response(messages)
+        except replicate.exceptions.ReplicateException as e:
+            print(e)
+            print("Responding with exception embed")
+            e_type = "Unknown exception"
+            if isinstance(e, replicate.exceptions.ReplicateError):
+                e_type = e.type
+            elif isinstance(e, replicate.exceptions.ModelError):
+                e_type = "Prediction failed, please try again"
+            embed = discord.Embed(
+                    title="Wystąpił błąd",
+                    description="Podczas odpowiadania wystąpił następujący błąd: " + e_type
+                )
+            if interaction is not None:
+                await interaction.followup.send(embed=embed, view=ExceptView(message))
+            else:
+                await message.reply(embed=embed, view=ExceptView(message))
+            return
+    text: str = response[1]
     print(f"{client.name}: {text}")
     if interaction is not None:
         reply = await interaction.followup.send(text)
     else:
         reply = await message.reply(text)
-    msg = Message(reply.id, message.id, 'assistant', text)
+    
+    idx = messages.index(message.id)
+    new_messages = messages[:idx]
+    await client.mysql.insert_messages(new_messages)
+    for x in new_messages:
+        cache[x.id] = x
+
+    msg = Message(reply.id, messages[0].id, 'assistant', text)
     await client.mysql.insert_message(msg)
     cache[reply.id] = msg
     last_message[reply.channel.id] = reply.id
