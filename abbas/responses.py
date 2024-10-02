@@ -56,7 +56,7 @@ class ResponseGen:
                         if match:
                             text = f"<|start_header_id|>system<|end_header_id|>\n\n{context['context']}<|eot_id|>{text}"
                             break
-            if len(self.tt.encode(prefix + text + prompt + suffix, bos=False, eos=False)) >= self.context_length:
+            if len(self.tt.encode(prefix + text + prompt + suffix, bos=False, eos=False, allowed_special="all")) >= self.context_length:
                 break
             prompt = text + prompt
         prompt = f"{prefix}{prompt}{suffix}"
