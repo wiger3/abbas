@@ -37,7 +37,7 @@ def _rewrite_url(url: str) -> str:
         if query:
             query += '&hl=en'
         else:
-            query = '?hl=en',
+            query = '?hl=en'
     fragment = ''
     
     return urlunparse((scheme, netloc, path, params, query, fragment))
