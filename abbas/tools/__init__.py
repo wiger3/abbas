@@ -106,10 +106,3 @@ def _run_async(loop: asyncio.AbstractEventLoop, result: Queue, exception: Queue,
         exception.put(e)
     else:
         result.put(ret)
-    
-if __name__ == "__main__":
-    manager = ToolsManager()
-    print("Available tools: ")
-    print(manager.describe_tools())
-    tool, tool_response = manager.parse_tool("<|start_tool|>" + input("> ") + "<|end_tool|>")
-    print(tool_response)
