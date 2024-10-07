@@ -4,12 +4,14 @@ import math
 MAX_VALUE = 2**128
 
 def calculator(query: str):
-    """A simple calculator. Supports math functions like "sqrt", "cos", etc."""
+    """A simple calculator. Supports math functions like "sqrt", "cos", etc. Use every time the user asks a math question."""
     if not query:
-        return query
+        return None
     if not isinstance(query, str):
         raise TypeError("Query must be str")
-    math_all = {x for x in dir(math) if not x.startswith('_')}
+    locals = {x for x in dir(math) if not x.startswith('_')}
+    locals = {x: getattr(math, x) for x in locals}
+    locals['abs'] = abs
     tree = ast.parse(query, mode='eval')
     
     allowed_nodes = {
@@ -58,7 +60,7 @@ def calculator(query: str):
             if not isinstance(node.func, ast.Name):
                 raise ValueError(f"Disallowed func type: {type(node.func).__name__}")
         if isinstance(node, ast.Name):
-            if node.id not in math_all:
+            if node.id not in locals:
                 raise ValueError(f"Disallowed function: {node.id}")
         if isinstance(node, ast.Constant):
             if not isinstance(node.value, (int, float, bool)):
@@ -71,10 +73,9 @@ def calculator(query: str):
     _validate(tree)
 
     globals = {'__builtins__': None}
-    locals = {x: getattr(math, x) for x in math_all}
     try:
         result = eval(compile(tree, '<unknown>', 'eval'), globals, locals)
-    except ZeroDivisionError:
+    except (ZeroDivisionError, OverflowError):
         result = math.inf
     return result
 
@@ -82,5 +83,5 @@ if __name__ == "__main__":
     while True:
         try:
             print(calculator(input("> ")))
-        except (ValueError, SyntaxError, TypeError, OverflowError) as e:
+        except (ValueError, SyntaxError, TypeError) as e:
             print(e)
