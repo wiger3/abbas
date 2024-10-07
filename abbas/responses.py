@@ -14,7 +14,7 @@ class ResponseGen:
         self.context_length = context_length
         self.heating = heating
         self.tt = Tokenizer(tokenizer_path)
-        self.tools = ToolsManager('abbas/tools')
+        self.tools = ToolsManager()
         self.tools_prompt = ""
         if len(self.tools.available_tools) > 0:
             self.tools_prompt = ("\n\nTool usage:\n"
@@ -99,7 +99,7 @@ class ResponseGen:
         )
         text = "".join(output)
         if '<|start_tool|>' in text:
-            tool, tool_response = self.tools.parse_tool(text)
+            tool, tool_response = await asyncio.to_thread(self.tools.parse_tool, text, asyncio.get_running_loop())
             print(tool, "==>", tool_response)
             if tool_response:
                 messages.insert(0, Message(Message.generate_id(messages), messages[0].id, 'assistant', f'<|start_tool|>{tool}<|end_tool|>'))
@@ -117,7 +117,7 @@ class ResponseGen:
                         return True
                 break
         return False
-    def heat_up(self, temperature: float, min: float, max: float, cap: float = 1.155) -> float:
+    def heat_up(self, temperature: float, min: float, max: float, cap: float = 1.055) -> float:
         lvl = random.uniform(min, min+max)
         if temperature + lvl >= cap:
             temperature -= lvl
