@@ -100,7 +100,11 @@ class ResponseGen:
         text = "".join(output)
         if '<|start_tool|>' in text:
             tool, tool_response = await asyncio.to_thread(self.tools.parse_tool, text, asyncio.get_running_loop())
-            print(tool, "==>", tool_response)
+            response_log = tool_response
+            if "\n" in response_log:
+                response_log = response_log.splitlines()
+                response_log = response_log[0] + f"... (Truncated {sum(len(x) for x in response_log[1:])} characters)"
+            print(tool, "==>", response_log)
             if tool_response:
                 messages.insert(0, Message(Message.generate_id(messages), messages[0].id, 'assistant', f'<|start_tool|>{tool}<|end_tool|>'))
                 messages.insert(0, Message(Message.generate_id(messages), messages[0].id, 'system', f'Response:\n\n{tool_response!s}'))
