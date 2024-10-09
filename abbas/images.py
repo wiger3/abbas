@@ -115,6 +115,8 @@ class ImagesManager:
         async with httpx.AsyncClient() as client:
             if content_type is not None:
                 r = await client.head(url)
+                if not 'Content-Type' in r.headers:
+                    raise RuntimeError(f"No Content-Type in response")
                 if not r.headers['Content-Type'].startswith(content_type):
                     raise RuntimeError(f"Wrong Content-Type! Expected '{content_type}', got '{r.headers['Content-Type']}'")
             r = await client.get(url)
