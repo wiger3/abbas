@@ -11,7 +11,7 @@ from typing import Optional
 Message = abbas.Message
 
 token = os.environ['DISCORD_TOKEN']
-tenor_apikey = os.environ['TENOR_APIKEY']
+tenor_apikey = os.environ['GOOGLE_APIKEY']
 
 intents = discord.Intents.default()
 intents.message_content = True

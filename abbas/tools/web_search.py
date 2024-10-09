@@ -1,4 +1,4 @@
-from urllib.parse import quote, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 import httpx
 from bs4 import BeautifulSoup, Tag
 from .load_url import load_url, user_agent, _raise_for_status
@@ -6,17 +6,21 @@ from typing import Iterator
 
 max_results = 2
 banned_sites = {
-    'youtube.com',
+    # user-generated content, usually doesn't contain much useful text
+    'facebook.com',
     'tiktok.com',
     'spotify.com',
+    'twitter.com', 'x.com',
+    # ai generated bullshit
     'quora.com',
-    'wikipedia.org' # too long
+    # too long TODO: custom parsers?
+    'wikipedia.org'
 }
 result_class = 'yuRUbf'
 
 def web_search(query: str):
     """Performs a web search for the query. Use every time you need to search the Internet."""
-    r = httpx.get(f'https://google.com/search?q={quote(query)}&hl=en', headers={'user-agent': user_agent}, follow_redirects=True)
+    r = httpx.get(f'https://google.com/search', params={'q': query, 'hl': 'en'}, headers={'user-agent': user_agent}, follow_redirects=True)
     _raise_for_status(r)
     soup = BeautifulSoup(r.text, 'html.parser')
     

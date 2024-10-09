@@ -1,3 +1,5 @@
+import os
+import json
 import itertools
 from urllib.parse import urlparse, urlunparse
 import httpx
@@ -32,23 +34,88 @@ def _rewrite_url(url: str) -> str:
         if len(domain) == 2 or domain[0] != 'old':
             netloc = 'old.reddit.com'
     if domain[-2:] == ['youtube', 'com']:
-        if path.startswith('/c/'):
-            path = path[2:]
-        if query:
-            query += '&hl=en'
+        if path == '/watch':
+            query = dict(x.split('=') for x in query.split('&'))
+            v = query['v']
+            netloc, path = 'watch', f'/{v}'
         else:
-            query = '?hl=en'
+            path = path.split('/')[1:]
+            if path[0] == 'c' or path[0] == 'user':
+                netloc = 'user'
+                channel = path[1]
+            elif path[0] == 'channel':
+                netloc = 'channel'
+                channel = path[1]
+            elif path[0].startswith('@'):
+                netloc = 'handle'
+                channel = path[0][1:]
+            else:
+                netloc = 'user'
+                channel = path[0]
+            path = f'/{channel}'
+        scheme, params, query = 'youtube', '', ''
     fragment = ''
     
     return urlunparse((scheme, netloc, path, params, query, fragment))
 
 def _fetch(url: str) -> str:
-    r = httpx.get(url, headers={'user-agent': user_agent}, follow_redirects=True)
+    if url.startswith("youtube://"):
+        return _fetch_youtube(url)
+    r = httpx.get(url, headers={'user-agent': user_agent, 'accept-language': 'en;q=0.9,*;q=0.5'}, follow_redirects=True)
     _raise_for_status(r)
     soup = BeautifulSoup(r.text, 'html.parser')
     parser = _get_parser(url)
     text = parser(soup)
     return text
+
+def _fetch_youtube(url: str) -> str:
+    key = os.getenv("GOOGLE_APIKEY")
+    path = url.split('/')[2:]
+    if path[0] == 'watch':
+        url = "https://www.googleapis.com/youtube/v3/videos"
+        r = httpx.get(url, params={'part': 'snippet', 'id': path[1], 'maxResults': 1, 'key': key})
+        _raise_for_status(r)
+        response = json.loads(r.text)
+        video = response['items'][0]['snippet']
+        title = video['title']
+        description = video['description']
+        author = video['channelTitle']
+        return f"YouTube video\n\nTitle: {title}\nAuthor: {author}\nDescription:\n{description.replace('\n\n', '\n')}"[:8000]
+    else:
+        data = {'part': 'snippet,statistics,contentDetails', 'maxResults': 1, 'key': key}
+        match path[0]:
+            case 'channel':
+                data['id'] = path[1]
+            case 'user':
+                data['forUsername'] = path[1]
+            case 'handle':
+                data['forHandle'] = path[1]
+            case _:
+                raise ValueError("Incorrect youtube path: " + path[1]) # should never happen
+        url = "https://www.googleapis.com/youtube/v3/channels"
+        r = httpx.get(url, params=data)
+        _raise_for_status(r)
+        response = json.loads(r.text)
+
+        channel = response['items'][0]['snippet']
+        channel.update(response['items'][0]['statistics'])
+        title = channel['title']
+        description = channel['description']
+        subscribers = channel['subscriberCount']
+        uploads = response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+
+        url = "https://www.googleapis.com/youtube/v3/playlistItems"
+        r = httpx.get(url, params={'part': 'snippet', 'playlistId': uploads, 'maxResults': 5, 'key': key})
+        _raise_for_status(r)
+        response = json.loads(r.text)
+        uploads = response['items']
+        if len(uploads) == 0:
+            uploads_text = "This channel has no videos."
+        else:
+            uploads_text = f"Last {len(uploads)} videos (latest to oldest):\n"
+            uploads_text += "\n".join(x['snippet']['title'] for x in uploads)
+        
+        return f"YouTube channel\n\nTitle: {title}\nSubscriber count: {subscribers}\nDescription:\n{description.replace('\n\n', '\n')}\n\n{uploads_text}"[:8000]
 
 def _get_parser(url: str) -> Callable:
     domain = urlparse(url).netloc.split('.')
