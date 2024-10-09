@@ -53,8 +53,8 @@ def _rewrite_url(url: str) -> str:
                 netloc = 'user'
                 channel = path[0]
             path = f'/{channel}'
-        scheme, params, query = 'youtube', '', ''
-    fragment = ''
+        scheme, query = 'youtube', ''
+    params, fragment = '', ''
     
     return urlunparse((scheme, netloc, path, params, query, fragment))
 
@@ -63,7 +63,7 @@ def _fetch(url: str) -> str:
         return _fetch_youtube(url)
     r = httpx.get(url, headers={'user-agent': user_agent, 'accept-language': 'en;q=0.9,*;q=0.5'}, follow_redirects=True)
     _raise_for_status(r)
-    soup = BeautifulSoup(r.text, 'html.parser')
+    soup = BeautifulSoup(r.text, 'lxml')
     parser = _get_parser(url)
     text = parser(soup)
     return text
@@ -121,6 +121,8 @@ def _get_parser(url: str) -> Callable:
     domain = urlparse(url).netloc.split('.')
     if domain[-3:] == ['old', 'reddit', 'com']:
         return _parser_reddit
+    if domain[-2:] == ['wikipedia', 'org']:
+        return _parser_wikipedia
     return _parser_default
 
 def _parser_default(soup: BeautifulSoup):
@@ -136,7 +138,8 @@ def _parser_default(soup: BeautifulSoup):
 def _parser_reddit(soup: BeautifulSoup, max_length = 8000):
     title = soup.find("p", class_="title").text
     tagline = soup.find("p", class_="tagline").text
-    submission = soup.find("div", class_="expando").text.strip()
+    expando = soup.find("div", class_="expando")
+    submission = expando.text.strip() if expando else ''
 
     text = f"{title}\n{tagline}\n{submission}"
 
@@ -176,11 +179,46 @@ def _parser_reddit(soup: BeautifulSoup, max_length = 8000):
         children = serialize_comments(comment['id'])
         return f"<comment author=\"{comment['author']}\">\n{comment['text']}\n{children}</comment>\n"
     
-    text = serialize_comments()
+    text += serialize_comments()
+    return text
+
+def _parser_wikipedia(soup: BeautifulSoup, max_length = 8000):
+    title = soup.find(class_="mw-page-title-main").text.strip()
+    sitesub = soup.find(id="siteSub").text.strip()
+    content = soup.find(id="mw-content-text").find(class_="mw-parser-output")
+
+    sections = {}
+    para = ['_']
+
+    for elem in content.children:
+        if elem.name == 'div' and elem.has_attr('class') and 'mw-heading2' in elem['class']:
+            text = '\n'.join(para[1:])
+            sections[para[0]] = text.strip()
+            para = [elem.find('h2').text.strip()]
+            continue
+        if elem.name == 'p':
+            for sup in elem.find_all('sup'):
+                sup.decompose()
+            para.append(elem.text.strip())
+            continue
+    
+    sections = {k: v for k, v in sections.items() if v}
+    text = f"{title}\n{sitesub}\n\n{sections.pop('_')}"
+    
+    if len(text) > max_length:
+        # raise error if we can't even insert the introduction
+        raise ValueError("Wikipedia article is too long to summarize!")
+    
+    for k, v in sections.items():
+        subtext = f"\n\n{k}\n\n{v}"
+        if len(text + subtext) > max_length:
+            break
+        text += subtext
+    
     return text
 
 def _answer_question(text: str, question: str) -> str:
-    system_prompt = "The user provides a question and a website's text. You analyze the text and answer the question."
+    system_prompt = "The user provides a question and a website's text. You analyze the text and answer the question. Always answer in the same language as the question."
     prefix = f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
     suffix = f"<|start_header_id|>assistant<|end_header_id|>\n\n"
     prompt = f"Question: {question}\n\n{text}"

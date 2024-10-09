@@ -12,9 +12,7 @@ banned_sites = {
     'spotify.com',
     'twitter.com', 'x.com',
     # ai generated bullshit
-    'quora.com',
-    # too long TODO: custom parsers?
-    'wikipedia.org'
+    'quora.com'
 }
 result_class = 'yuRUbf'
 
