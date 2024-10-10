@@ -136,12 +136,48 @@ def _parser_default(soup: BeautifulSoup):
     return text
 
 def _parser_reddit(soup: BeautifulSoup, max_length = 8000):
-    title = soup.find("p", class_="title").text
+    title = soup.find("p", class_="title").find("a")
     tagline = soup.find("p", class_="tagline").text
     expando = soup.find("div", class_="expando")
-    submission = expando.text.strip() if expando else ''
-
-    text = f"{title}\n{tagline}\n{submission}"
+    if expando:
+        media = expando.find(class_="media-preview")
+        if media:
+            video = media.find("video")
+            img = media.find("img")
+            if video:
+                submission = "[video]"
+            elif img:
+                submission = "[image]"
+            else:
+                submission = "[media]"
+        else:
+            submission = expando.text.strip()
+    else:
+        submission = "[no content]"
+        if title.has_attr('href'):
+            href = title['href']
+            parsed = urlparse(href)
+            if parsed.netloc == 'preview.redd.it':
+                parsed.netloc = 'i.redd.it'
+                parsed.query = ''
+                href = urlunparse(parsed)
+            try:
+                r = httpx.head(href, headers={'user-agent': user_agent}, follow_redirects=True).raise_for_status()
+                if 'content-type' in r.headers:
+                    content_type = r.headers['content-type']
+                    if content_type == 'text/plain':
+                        r = httpx.get(href, headers={'user-agent': user_agent}, follow_redirects=True).raise_for_status()
+                        submission = r.text.strip()
+                    else:
+                        content_type = content_type.split('/', 1)[0]
+                        if content_type in ('image', 'video'):
+                            submission = f"[{content_type}]"
+            except httpx.HTTPError:
+                pass
+                
+    
+    title = title.text
+    text = f"{title}\n{tagline}\n{submission}\n\n"
 
     i = 0
     def parse_comments(elem: Tag, parent_id: int = 0):
@@ -152,9 +188,13 @@ def _parser_reddit(soup: BeautifulSoup, max_length = 8000):
         nonlocal i
         i += 1
         author_elem = elem.find(class_="author")
+        text_elem = elem.find(class_="md")
+        score_elem = elem.find(class_="tagline").find(class_="unvoted")
+        if not text_elem or not score_elem:
+            return []
         comment_author = author_elem.text if author_elem else "[deleted]"
-        comment_text = "\n".join(p.text for p in elem.find(class_="md").find_all("p")).strip()
-        comment_score = int(elem.find(class_="tagline").find(class_="unvoted")['title'])
+        comment_text = "\n".join(p.text for p in text_elem.find_all("p")).strip()
+        comment_score = int(score_elem['title'])
         result = [{'id': i, 'author': comment_author, 'text': comment_text, 'score': comment_score, 'parent': parent_id}]
 
         child = elem.find(class_="child")
@@ -218,7 +258,7 @@ def _parser_wikipedia(soup: BeautifulSoup, max_length = 8000):
     return text
 
 def _answer_question(text: str, question: str) -> str:
-    system_prompt = "The user provides a question and a website's text. You analyze the text and answer the question. Always answer in the same language as the question."
+    system_prompt = "The user provides a question and a website's text. You analyze the text and answer the question."
     prefix = f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
     suffix = f"<|start_header_id|>assistant<|end_header_id|>\n\n"
     prompt = f"Question: {question}\n\n{text}"
