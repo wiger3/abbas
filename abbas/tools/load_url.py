@@ -207,7 +207,7 @@ def _parser_reddit(soup: BeautifulSoup, max_length = 8000):
     
     # remove least important comments (lowest rated, without children) to get under the character limit
     template_len = len('<comment author="">\n\n</comment>\n')
-    while template_len * len(comments) + len(''.join(comment['author'] + comment['text'] for comment in comments)) > max_length:
+    while len(text) + template_len * len(comments) + len(''.join(comment['author'] + comment['text'] for comment in comments)) > max_length:
         parents = {x['parent'] for x in comments}
         childless = (x for x in comments if x['id'] not in parents)
         worst = min(childless, key=lambda x: x['score'])
