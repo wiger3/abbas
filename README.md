@@ -29,7 +29,7 @@ Get the following API keys:
 2. Discord: Go to https://discord.com/developers/applications, make a new application, go to the Bot tab and click "Reset Token"
 3. Tenor: https://developers.google.com/tenor/guides/quickstart#setup
 
-Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKEN`, `TENOR_APIKEY`.
+Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKEN`, `GOOGLE_APIKEY`.
 
 Get a MySQL server and import the abbas.sql file.
 
