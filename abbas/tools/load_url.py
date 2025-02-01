@@ -91,7 +91,7 @@ def _fetch_youtube(url: str) -> str:
             case 'handle':
                 data['forHandle'] = path[1]
             case _:
-                raise ValueError("Incorrect youtube path: " + path[1]) # should never happen
+                raise ValueError("Incorrect youtube path: " + path[0]) # should never happen
         url = "https://www.googleapis.com/youtube/v3/channels"
         r = httpx.get(url, params=data)
         _raise_for_status(r)
