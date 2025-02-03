@@ -4,8 +4,6 @@ import inspect
 import asyncio
 import importlib
 import importlib.util
-from threading import Thread
-from queue import Queue
 from typing import Callable, Optional
 
 class ToolsManager:
@@ -34,7 +32,7 @@ class ToolsManager:
             tools.append(f"{name}{sig} - {doc}")
         return "\n".join(tools)
     
-    def parse_tool(self, text: str, loop: Optional[asyncio.AbstractEventLoop] = None) -> tuple[str, str]:
+    def parse_tool(self, text: str, loop: Optional[asyncio.AbstractEventLoop] = None) -> tuple[str, str] | tuple[None, None]:
         idx = text.find('<|start_tool|>')
         if idx == -1:
             return None, None
@@ -72,37 +70,18 @@ class ToolsManager:
         target = self.available_tools[tree.body.func.id]
         args = tuple(x.value for x in tree.body.args)
         kwargs = {x.arg: x.value.value for x in tree.body.keywords}
+        return self._run_tool(target, args, kwargs, loop)
 
+    def _run_tool(self, target: Callable, args: tuple, kwargs: dict, loop: Optional[asyncio.AbstractEventLoop]):
         is_async = inspect.iscoroutinefunction(target)
         if is_async and not loop:
             loop = asyncio.new_event_loop()
-        q = Queue()
-        exc = Queue()
+        
         if is_async:
-            p = Thread(target=_run_async, args=(loop, q, exc, target)+args, kwargs=kwargs)
+            if not loop.is_running():
+                return loop.run_until_complete(target(*args, **kwargs))
+            else:
+                future = asyncio.run_coroutine_threadsafe(target(*args, **kwargs), loop)
+                return future.result()
         else:
-            p = Thread(target=_run, args=(q, exc, target)+args, kwargs=kwargs)
-        p.start()
-        p.join()
-        if not exc.empty():
-            raise exc.get()
-        return q.get()
-
-def _run(result: Queue, exception: Queue, target: Callable, *args, **kwargs):
-    try:
-        ret = target(*args, **kwargs)
-    except Exception as e:
-        exception.put(e)
-    else:
-        result.put(ret)
-def _run_async(loop: asyncio.AbstractEventLoop, result: Queue, exception: Queue, target: Callable, *args, **kwargs):
-    try:
-        if not loop.is_running():
-            ret = loop.run_until_complete(target(*args, **kwargs))
-        else:
-            future = asyncio.run_coroutine_threadsafe(target(*args, **kwargs), loop)
-            ret = future.result()
-    except Exception as e:
-        exception.put(e)
-    else:
-        result.put(ret)
+            return target(*args, **kwargs)
