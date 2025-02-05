@@ -247,7 +247,9 @@ if __name__ == "__main__":
         blip_source = input("Choose BLIP source (replicate/cuda/cpu): ")
         ocr = input("Enable OCR? (Y/N): ")
         ocr = ocr[0].upper() != 'N'
-        images = ImagesManager(blip_source, 10, 512, ocr, os.environ['TENOR_APIKEY'])
+        if ocr or blip_source != 'replicate':
+            print("Please wait, initializing models...", end='\r')
+        images = ImagesManager(blip_source, 10, 512, ocr, os.environ['GOOGLE_APIKEY'])
         caption = await images.caption_image(input("File link: "))
         if caption is None:
             print(":(")

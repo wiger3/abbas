@@ -4,7 +4,6 @@ import json
 import random
 import asyncio
 import replicate
-from replicate.exceptions import ReplicateError, ModelError
 from llama.tokenizer import Tokenizer
 from .tools import ToolsManager
 from .message import Message
@@ -147,13 +146,18 @@ class ResponseGen:
 
 if __name__ == '__main__':
     async def main():
-        messages = []
+        messages: list[Message] = []
         context = None
 
         def add_message(sender, text):
             nonlocal messages
-            messages.append(Message(len(messages), len(messages)-1 if len(messages) else None, sender, text))
+            messages.append(Message(
+                Message.generate_id(messages),
+                messages[-1].id if len(messages) else None,
+                sender, text))
         
+        responder = ResponseGen(2000, True)
+
         if os.path.isfile('first_message.txt'):
             try:
                 with open('first_message.txt', 'r', encoding='utf-8') as file:
@@ -161,20 +165,20 @@ if __name__ == '__main__':
                     print("Abbas Baszir: " + messages[0].text)
             except OSError:
                 pass
-        respgen = ResponseGen(2000)
+        
         while True:
             text = input('> ')
             if text[0] == ':':
                 args = text[1:].split(' ')
                 cmd = args[0].lower()
-                if cmd == 'exit':
+                if cmd == 'exit' or cmd == 'quit' or cmd == 'q':
                     break
-                elif cmd == 'msgs':
+                elif cmd == 'msgs' or cmd == 'messages':
                     print(messages)
                 elif cmd == 'context':
                     print(context)
                     if context:
-                        print(f"Context length: {len(respgen.tt.encode(context['prompt'], bos=False, eos=False))}/{respgen.context_length}")
+                        print(f"Context length: {len(responder.tt.encode(context['prompt'], bos=False, eos=False, allowed_special="all"))}/{responder.context_length}")
                 elif cmd == 'bp':
                     breakpoint()
                 else:
@@ -182,9 +186,7 @@ if __name__ == '__main__':
                 continue
             print("...", end='\r')
             add_message('user', text)
-            response = await respgen.generate_response(messages)
-            context = response[0]
-            message = response[1]
-            add_message({'assistant', message})
+            context, message = await responder.generate_response(messages[::-1])
+            add_message('assistant', message)
             print("Abbas Baszir: " + message)
     asyncio.run(main())

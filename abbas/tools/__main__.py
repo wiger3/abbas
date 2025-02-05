@@ -1,4 +1,4 @@
-from tools import ToolsManager
+from . import ToolsManager
 
 manager = ToolsManager()
 print("Available tools: ")
