@@ -74,7 +74,7 @@ def calculator(query: str):
 
     globals = {'__builtins__': None}
     try:
-        result = eval(compile(tree, '<unknown>', 'eval'), globals, locals)
+        result = eval(compile(tree, '<string>', 'eval'), globals, locals)
     except (ZeroDivisionError, OverflowError):
         result = math.inf
     return result

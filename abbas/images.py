@@ -67,7 +67,7 @@ class ImagesManager:
         
         return caption
 
-    async def parse_tenor(self, url: str) -> tuple[str, str]:
+    async def parse_tenor(self, url: str) -> str:
         """
         Retrieves a direct image link from a Tenor link.
 

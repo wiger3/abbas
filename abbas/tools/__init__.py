@@ -4,6 +4,7 @@ import inspect
 import asyncio
 import importlib
 import importlib.util
+from traceback import format_exc
 from typing import Callable, Optional
 
 class ToolsManager:
@@ -33,6 +34,25 @@ class ToolsManager:
         return "\n".join(tools)
     
     def parse_tool(self, text: str, loop: Optional[asyncio.AbstractEventLoop] = None) -> tuple[str, str] | tuple[None, None]:
+        """
+        Parse and execute a tool.
+
+        Args:
+            text: Input text containing the tool call in the format of:
+                  "<|start_tool|>tool(args)<|end_tool|>"
+            loop: The running asyncio tool to execute async tools in.
+                  If not provided, a new loop will be created and ran.
+        
+        Returns:
+            tuple of:
+                [0] - the tool call itself ("tool(args)")
+                [1] - the result of the tool as string, or the summary of an exception that occurred
+            or tuple of (None, None) if text doesn't contain a tool call
+        
+        Notes:
+            Thread creation is the responsibility of the caller.
+            A tool can be either sync or async.
+        """
         idx = text.find('<|start_tool|>')
         if idx == -1:
             return None, None
@@ -47,6 +67,8 @@ class ToolsManager:
         try:
             ret = self._parse_tool(tool, loop)
         except Exception as e:
+            print(f"Exception while calling tool {tool}:")
+            print(format_exc())
             return tool, f"Error: {str(e).split('\n')[-1]}"
         return tool, str(ret)
     
@@ -73,11 +95,9 @@ class ToolsManager:
         return self._run_tool(target, args, kwargs, loop)
 
     def _run_tool(self, target: Callable, args: tuple, kwargs: dict, loop: Optional[asyncio.AbstractEventLoop]):
-        is_async = inspect.iscoroutinefunction(target)
-        if is_async and not loop:
-            loop = asyncio.new_event_loop()
-        
-        if is_async:
+        if inspect.iscoroutinefunction(target):
+            if not loop:
+                loop = asyncio.new_event_loop()
             if not loop.is_running():
                 return loop.run_until_complete(target(*args, **kwargs))
             else:
