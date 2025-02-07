@@ -40,8 +40,19 @@ Save the api keys in environment variables: `REPLICATE_API_TOKEN`, `DISCORD_TOKE
 2. Download [CUDA 12](https://developer.nvidia.com/cuda-download) and cuDNN 8 for CUDA 12 ([Windows](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-8.9.7.29_cuda12-archive.zip), [Linux](https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz))
 3. Set `whisper_source` in config to `cuda`
 
+(Optional) If you want to run BLIP (image captioning) locally on your own GPU instead of Replicate (to avoid their random queue times):
+1. Download PyTorch according to the instructions on https://pytorch.org/get-started/locally/#start-locally
+2. Download HuggingFace Transformers with `pip install transformers`
+3. Set `clip_source` in config to `cuda`
+
+(Optional) Installing OCR (requires GPU):
+1. Download PyTorch if not installed already in the previous step
+2. Download the OCR package with `pip install git+https://github.com/wiger3/EasyOCR`
+3. Set `ocr` in config to `true`
+
 Fill out config.json:
 ```yaml
+name: Assistant's name, shows up in console (default: Abbas Baszir)
 custom_status: Status displayed by the bot on Discord (default: Bogaty szejk)
 context_length: max conversation token length to send to the model (default: 2000)
 heating: increase generation temperature the longer a conversation is going on. Higher temperature makes the model output more gibberish. This option exists because it's funny (default: false)

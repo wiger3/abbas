@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import io
 import time
@@ -5,17 +6,17 @@ import asyncio
 import threading
 import time
 import discord
-import discord.app_commands
 from discord.ext import voice_recv
 from discord.ext.voice_recv.silence import SILENCE_PCM
 import replicate.exceptions
 import abbas
 import abbas.voice
-from abbas.message import Message
-from abbas.config import config
+from typing import Optional
+
+Message = abbas.Message
 
 class VoiceClient(voice_recv.VoiceRecvClient):
-    def __init__(self, client: discord.Client, channel: discord.abc.Connectable):
+    def __init__(self, client: Abbas, channel: discord.abc.Connectable):
         super().__init__(client, channel)
         self.ready = False
         self.msg: discord.Message = None
@@ -61,7 +62,7 @@ class VoiceClient(voice_recv.VoiceRecvClient):
         print(detected)
         self.update_embed("Generating response",
                           field=("Detected text", f"```{detected}```"))
-        input, text = asyncio.run_coroutine_threadsafe(abbas.generate_response(self.messages[::-1]), loop).result()
+        input, text = asyncio.run_coroutine_threadsafe(client.responder.generate_response(self.messages[::-1]), loop).result()
         if isinstance(text, replicate.exceptions.ReplicateException):
             print("Responding with exception embed")
             e_type = "Unknown exception"
@@ -96,9 +97,7 @@ class VoiceClient(voice_recv.VoiceRecvClient):
     def create_message(self, sender: str, text: str):
         if not text or not sender:
             return
-        id = int(time.time()*1000) << 6
-        while next((x for x in self.messages if x.id == id), None):
-            id += 1
+        id = Message.generate_id(self.messages)
         msg = Message(id, self.messages[-1].id if self.messages else None, sender, text)
         self.messages.append(msg)
     
@@ -118,14 +117,22 @@ intents.message_content = True
 
 voice: VoiceClient = None
 
-client = discord.Client(intents=intents)
-tree = discord.app_commands.CommandTree(client)
+class Abbas(discord.Client):
+    def __init__(self, *, intents: discord.Intents, **options) -> None:
+        super().__init__(intents=intents, **options)
+        self.config = abbas.Config('config.json')
+        self.name = self.config.name or "Abbas Baszir"
+        self.responder = abbas.ResponseGen(
+            self.config.context_length or 2000,
+            self.config.heating or False
+        )
+
+client = Abbas(intents=intents)
 
 @client.event
 async def on_ready():
-    await tree.sync()
-    await client.change_presence(activity=discord.CustomActivity(name=config.custom_status))
-    print(f"Abbas Baszir working as {client.user}")
+    await client.change_presence(activity=discord.CustomActivity(name=client.config.custom_status))
+    print(f"{client.name} working as {client.user}")
 
 @client.event
 async def on_message(message: discord.Message):
