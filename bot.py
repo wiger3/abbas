@@ -271,12 +271,16 @@ class Sink(voice_recv.AudioSink):
     def kill_listener(self):
         while self.last_packet == 0 or time.time() - self.last_packet < 1:
             time.sleep(0.25)
-            if not self.voice_client:
+            try:
+                if not self.voice_client:
+                    return
+                if not self.voice_client.is_connected():
+                    return
+                if not self.voice_client.is_listening():
+                    return
+            except Exception:
                 return
-            if not self.voice_client.is_connected():
-                return
-            if not self.voice_client.is_listening():
-                return
+            
             if time.time() - self.started_at > 15:
                 break
         vc = self.voice_client
