@@ -10,7 +10,6 @@ from discord.ext import voice_recv
 from discord.ext.voice_recv.silence import SILENCE_PCM
 import replicate.exceptions
 import abbas
-import abbas.voice
 from typing import Optional
 
 Message = abbas.Message
@@ -34,7 +33,7 @@ class VoiceClient(voice_recv.VoiceRecvClient):
             t: list[asyncio.Task] = []
             async with asyncio.TaskGroup() as tg:
                 for buf in bufs.values():
-                    t.append(tg.create_task(abbas.voice.listen(buf)))
+                    t.append(tg.create_task(client.voice.listen(buf)))
             return dict(zip(bufs.keys(), [x.result() for x in t]))
         transcriptions: dict[discord.User|discord.Member, str] = asyncio.run_coroutine_threadsafe(tasks(), loop).result()
         if list(transcriptions.values()).count(None) == len(transcriptions):
@@ -126,6 +125,7 @@ class Abbas(discord.Client):
             self.config.context_length or 2000,
             self.config.heating or False
         )
+        self.voice = abbas.VoiceManager(self.config.whisper_source or "replicate")
 
 client = Abbas(intents=intents)
 
@@ -229,7 +229,7 @@ class ChunkedPCMAudio(discord.AudioSource):
     def __init__(self, text: str):
         self.end = False
         self.buf = b''
-        self.generator = abbas.voice.speak(text)
+        self.generator = client.voice.speak(text)
         self.loop = asyncio.new_event_loop()
     async def aread(self) -> bytes:
         if self.end and len(self.buf) == 0:
