@@ -10,7 +10,7 @@ pip install -r requirements.txt
 `voice` branch requires FFmpeg. It can be downloaded as follows: \
 Windows: https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-essentials.7z \
 Linux: Download using your package manager \
-(Optional) `voice.py` demo requires mpv.
+(Optional) `voice.py` demo requires pyaudio: `pip install pyaudio`
 
 Download the Llama3 tokenizer from Meta:
 1. Go to [Request access to Meta Llama](https://llama.meta.com/llama-downloads) and fill in your details (Select Llama 3 from previous models)

@@ -126,53 +126,63 @@ def ffmpeg(input_args: list, input: bytes, output_args: list) -> bytes:
     return out
 
 async def main():
-    manager = VoiceManager("replicate")
+    import wave
+    from time import time
+    try:
+        import pyaudio
+    except ImportError:
+        print("pyaudio is needed to run the demo")
+        print("install it using pip install pyaudio")
+        return
+    
+    p = pyaudio.PyAudio()
+    whisper_source = input("Choose Whisper source (replicate/cuda/cpu): ")
+    manager = VoiceManager(whisper_source)
+    
+    CHUNK = 1024
+    CHANNELS = 2
+    RATE = 48000
+    SECONDS = 5
+    
+    audiostream = p.open(
+        format=pyaudio.paInt16,
+        channels=CHANNELS,
+        rate=RATE,
+        input=True,
+        output=True
+    )
+
     while True:
-        text = input('> ')
+        input("\nPress enter to start speaking...")
+        print(f"Listening to your microphone for {SECONDS} seconds")
 
-        if text == 'exit':
-            return
+        audio = b""
+        for i in range(0, RATE // CHUNK * SECONDS):
+            audio += audiostream.read(CHUNK)
         
-        async def stream_pcm_async(audio_stream: AsyncIterator[bytes]) -> bytes:
-            # elevenlabs.play.stream but async and for raw PCM
-            def is_installed(lib_name: str) -> bool:
-                from shutil import which
-                lib = which(lib_name)
-                if lib is None:
-                    return False
-                return True
-            if not is_installed("mpv"):
-                message = (
-                    "mpv not found, necessary to stream audio. "
-                    "On mac you can install it with 'brew install mpv'. "
-                    "On linux and windows you can install it from https://mpv.io/"
-                )
-                raise ValueError(message)
+        microphone_wav = f'microphone_{int(time())}.wav'
+        with wave.open(microphone_wav, 'w') as wav:
+            wav.setnchannels(CHANNELS)
+            wav.setframerate(RATE)
+            wav.setsampwidth(2)
+            wav.writeframes(audio)
+        
+        text = await manager.listen(audio, sample_size=RATE, channels=CHANNELS)
+        print("You said: " + text)
+        audio = b""
+        async for chunk in manager.speak(text, sample_size=RATE, channels=CHANNELS):
+            audiostream.write(chunk)
+            audio += chunk
 
-            mpv_command = ['mpv', '--demuxer=rawaudio', '--demuxer-rawaudio-channels=2', '--demuxer-rawaudio-rate=48000', '--demuxer-rawaudio-format=s16le', '--no-cache', '--no-terminal', '--', 'fd://0']
-            mpv_process = subprocess.Popen(
-                mpv_command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+        elevenlabs_wav = f'elevenlabs_{int(time())}.wav'
+        with wave.open(elevenlabs_wav, 'w') as wav:
+            wav.setnchannels(CHANNELS)
+            wav.setframerate(RATE)
+            wav.setsampwidth(2)
+            wav.writeframes(audio)
 
-            audio = b""
-
-            async for chunk in audio_stream:
-                if chunk is not None:
-                    mpv_process.stdin.write(chunk)  # type: ignore
-                    mpv_process.stdin.flush()  # type: ignore
-                    audio += chunk
-            if mpv_process.stdin:
-                mpv_process.stdin.close()
-            mpv_process.wait()
-            return audio
-
-        audio = await stream_pcm_async(manager.speak(text))
-        with open('audio.pcm', 'wb') as file:
-            file.write(audio)
-        print("Spoken audio was saved as 16-bit Little Endian 48KHz stereo PCM in audio.pcm!")
+        print(f"Your microphone audio was saved to {microphone_wav}")
+        print(f"Elevenlabs generated audio was saved to {elevenlabs_wav}")
 
 if __name__ == "__main__":
     asyncio.run(main())

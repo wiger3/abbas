@@ -167,7 +167,8 @@ cython_debug/
 config.json
 system_prompt*.txt
 first_message*.txt
-first_message*.ogg
+*.ogg
+*.wav
 additional_contexts*.json
 abbas.bat
 mysql.ini
