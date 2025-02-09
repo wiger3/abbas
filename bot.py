@@ -125,7 +125,7 @@ class Abbas(discord.Client):
             self.config.context_length or 2000,
             self.config.heating or False
         )
-        self.voice = abbas.VoiceManager(self.config.whisper_source or "replicate")
+        self.voice = abbas.VoiceManager(self.config.whisper_source or "replicate", self.config.whisper_language)
 
 client = Abbas(intents=intents)
 
@@ -218,6 +218,9 @@ async def on_message(message: discord.Message):
         case 'convo':
             if not voice or not voice.is_connected():
                 await message.reply("I am not in a voice channel")
+                return
+            if len(voice.messages == 0):
+                await message.reply("Conversation is empty")
                 return
             convo = "\n".join(f"{x.sender}: {x.text}" for x in voice.messages)
             file = io.BytesIO(convo.encode('utf-8'))

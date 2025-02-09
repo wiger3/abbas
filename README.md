@@ -47,6 +47,7 @@ custom_status: Status displayed by the bot on Discord (default: Bogaty szejk)
 context_length: max conversation token length to send to the model (default: 2000)
 heating: increase generation temperature the longer a conversation is going on. Higher temperature makes the model output more gibberish. This option exists because it's funny (default: false)
 whisper_source: what to use for Whisper inference, values other than "replicate" will assume local installation and will be passed as device to PyTorch (default: replicate)
+whisper_language: spoken language as a two-letter country code ("en"), or `null`. If `null`, language will be detected from audio. (default: null)
 ```
 
 (Optional) Create prompting files for the model:

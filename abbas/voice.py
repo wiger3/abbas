@@ -14,7 +14,8 @@ voice_abbas = elevenlabs.Voice(
 
 
 class VoiceManager:
-    def __init__(self, whisper_source: str):
+    def __init__(self, whisper_source: str, language: Optional[str] = None):
+        self.language = language or None
         self.local_whisper = whisper_source != "replicate"
         if self.local_whisper:
             from faster_whisper import WhisperModel
@@ -38,7 +39,7 @@ class VoiceManager:
                 wav.writeframes(audio)
                 wav.close()
                 audioio.seek(0)
-                segments, info = self.whisper.transcribe(audioio, language='pl')
+                segments, info = self.whisper.transcribe(audioio, language=self.language)
                 return "".join(x.text for x in segments)
             whisper_start = time()
             result = await asyncio.to_thread(run)
@@ -58,7 +59,7 @@ class VoiceManager:
             audio = f"data:application/octet-stream;base64,{data}"
             input = {
                 "model": "large-v3",
-                "language": "pl",
+                "language": self.language,
                 "translate": False,
                 "audio": audio
             }
