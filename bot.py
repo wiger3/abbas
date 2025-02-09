@@ -5,6 +5,7 @@ import time
 import asyncio
 import threading
 import time
+import concurrent.futures
 import discord
 from discord.ext import voice_recv
 from discord.ext.voice_recv.silence import SILENCE_PCM
@@ -20,22 +21,34 @@ class VoiceClient(voice_recv.VoiceRecvClient):
         self.ready = False
         self.msg: discord.Message = None
         self.messages: list[Message] = []
+        self.whisper_future: Optional[concurrent.futures.Future] = None
     
     def stop_listening(self, bufs: dict[bytes] = None):
         if self.is_listening():
             print(f"Stopping listening")
+        if self.whisper_future is not None:
+            self.whisper_future.cancel()
+            self.whisper_future = None
         super().stop_listening()
         if bufs is None:
             return
         started_at = time.time()
         loop = self.client.loop
+        
         async def tasks():
             t: list[asyncio.Task] = []
             async with asyncio.TaskGroup() as tg:
                 for buf in bufs.values():
                     t.append(tg.create_task(client.voice.listen(buf)))
             return dict(zip(bufs.keys(), [x.result() for x in t]))
-        transcriptions: dict[discord.User|discord.Member, str] = asyncio.run_coroutine_threadsafe(tasks(), loop).result()
+        self.whisper_future = asyncio.run_coroutine_threadsafe(tasks(), loop)
+        try:
+            transcriptions: dict[discord.User|discord.Member, str] = self.whisper_future.result()
+        except concurrent.futures.CancelledError:
+            return
+        finally:
+            self.whisper_future = None
+        
         if list(transcriptions.values()).count(None) == len(transcriptions):
             print("Responding with timeout embed")
             e_type = "Whisper timeout for all speakers"
