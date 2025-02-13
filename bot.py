@@ -6,6 +6,7 @@ import discord
 import discord.app_commands
 import abbas
 import replicate.exceptions
+from traceback import print_exc
 from typing import Optional
 
 Message = abbas.Message
@@ -32,7 +33,7 @@ class Abbas(discord.Client):
             tenor_apikey
         )
         self.mysql = abbas.MySQL(**self.config.mysql)
-        self.responder = abbas.ResponseGen(
+        self.responder = abbas.ReplicateLlamaResponder(
             self.config.context_length or 2000,
             self.config.heating or False
         )
@@ -113,14 +114,16 @@ async def respond(message: discord.Message, *, interaction: Optional[discord.Int
         cache[message.id] = messages[0]
         try:
             response = await client.responder.generate_response(messages)
-        except replicate.exceptions.ReplicateException as e:
-            print(e)
+        except Exception as e:
+            print_exc()
             print("Responding with exception embed")
             e_type = "Unknown exception"
             if isinstance(e, replicate.exceptions.ReplicateError):
                 e_type = e.type
             elif isinstance(e, replicate.exceptions.ModelError):
                 e_type = "Prediction failed, please try again"
+            elif isinstance(e, RuntimeError):
+                e_type = str(e)
             embed = discord.Embed(
                     title="Wystąpił błąd",
                     description="Podczas odpowiadania wystąpił następujący błąd: " + e_type

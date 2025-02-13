@@ -5,9 +5,10 @@ import asyncio
 import importlib
 import importlib.util
 from traceback import format_exc
+from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
-class ToolsManager:
+class ToolsManager(ABC):
     def __init__(self):
         tools_dir = os.path.dirname(__file__)
         self.available_tools = {}
@@ -20,26 +21,20 @@ class ToolsManager:
             module = importlib.import_module('.' + tool, __name__)
             self.available_tools[tool] = getattr(module, tool)
     
+    @abstractmethod
     def describe_tools(self) -> str:
-        tools = []
-        for tool in self.available_tools.values():
-            name = tool.__name__
-            sig = inspect.signature(tool)
-            params = []
-            for param in sig.parameters.values():
-                params.append(param.replace(default=inspect.Parameter.empty))
-            sig = sig.replace(parameters=params, return_annotation=inspect.Signature.empty)
-            doc = inspect.getdoc(tool) or "No description available"
-            tools.append(f"{name}{sig} - {doc}")
-        return "\n".join(tools)
+        raise NotImplementedError
     
-    def parse_tool(self, text: str, loop: Optional[asyncio.AbstractEventLoop] = None) -> tuple[str, str] | tuple[None, None]:
+    @abstractmethod
+    def parse_tool(self, text, loop: Optional[asyncio.AbstractEventLoop] = None) -> tuple[str, str] | tuple[None, None]:
         """
         Parse and execute a tool.
 
         Args:
-            text: Input text containing the tool call in the format of:
-                  "<|start_tool|>tool(args)<|end_tool|>"
+            text: Tool call.
+                For llama, str containing: "<|start_tool|>tool(args)<|end_tool|>"
+                For openai, dict of their function call format
+
             loop: The running asyncio tool to execute async tools in.
                   If not provided, a new loop will be created and ran.
         
@@ -53,6 +48,36 @@ class ToolsManager:
             Thread creation is the responsibility of the caller.
             A tool can be either sync or async.
         """
+        raise NotImplementedError
+
+    def _run_tool(self, target: Callable, args: tuple, kwargs: dict, loop: Optional[asyncio.AbstractEventLoop]):
+        if inspect.iscoroutinefunction(target):
+            if not loop:
+                loop = asyncio.new_event_loop()
+            if not loop.is_running():
+                return loop.run_until_complete(target(*args, **kwargs))
+            else:
+                future = asyncio.run_coroutine_threadsafe(target(*args, **kwargs), loop)
+                return future.result()
+        else:
+            return target(*args, **kwargs)
+
+
+class LlamaToolsManager(ToolsManager):
+    def describe_tools(self) -> str:
+        tools = []
+        for tool in self.available_tools.values():
+            name = tool.__name__
+            sig = inspect.signature(tool)
+            params = []
+            for param in sig.parameters.values():
+                params.append(param.replace(default=inspect.Parameter.empty))
+            sig = sig.replace(parameters=params, return_annotation=inspect.Signature.empty)
+            doc = inspect.getdoc(tool) or "No description available"
+            tools.append(f"{name}{sig} - {doc}")
+        return "\n".join(tools)
+    
+    def parse_tool(self, text: str, loop: asyncio.AbstractEventLoop | None = None) -> tuple[str, str] | tuple[None, None]:
         idx = text.find('<|start_tool|>')
         if idx == -1:
             return None, None
@@ -94,14 +119,3 @@ class ToolsManager:
         kwargs = {x.arg: x.value.value for x in tree.body.keywords}
         return self._run_tool(target, args, kwargs, loop)
 
-    def _run_tool(self, target: Callable, args: tuple, kwargs: dict, loop: Optional[asyncio.AbstractEventLoop]):
-        if inspect.iscoroutinefunction(target):
-            if not loop:
-                loop = asyncio.new_event_loop()
-            if not loop.is_running():
-                return loop.run_until_complete(target(*args, **kwargs))
-            else:
-                future = asyncio.run_coroutine_threadsafe(target(*args, **kwargs), loop)
-                return future.result()
-        else:
-            return target(*args, **kwargs)

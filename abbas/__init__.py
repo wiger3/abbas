@@ -1,4 +1,4 @@
-from .responses import ResponseGen
+from .responses import ReplicateLlamaResponder
 from .images import ImagesManager
 from .mysql import MySQL
 from .message import Message
