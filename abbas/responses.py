@@ -97,17 +97,22 @@ class ReplicateLlamaResponder(Responder):
         suffix = f"<|start_header_id|>assistant<|end_header_id|>\n\n"
         prompt = ''
         for msg in messages:
-            if not msg.text:
-                continue
-            text = f"<|start_header_id|>{msg.sender}<|end_header_id|>\n\n{msg.text}<|eot_id|>"
-            if msg.sender != 'assistant':
-                for context in additional_contexts:
-                    for trigger in context['trigger_words']:
-                        regex = re.compile(trigger, re.I)
-                        match = regex.search(msg.text)
-                        if match:
-                            text = f"<|start_header_id|>system<|end_header_id|>\n\n{context['context']}<|eot_id|>{text}"
-                            break
+            if msg.tool_calls:
+                tc = msg.tool_calls[0]
+                text = (f"<|start_header_id|>{msg.sender}<|end_header_id|>\n\n<|start_tool|>{tc.expression}<|end_tool|><|eot_id|>"
+                        f"<|start_header_id|>system<|end_header_id|>\n\nResponse:\n\n{tc.result}<|eot_id|>")
+            else:
+                if not msg.text:
+                    continue
+                text = f"<|start_header_id|>{msg.sender}<|end_header_id|>\n\n{msg.text}<|eot_id|>"
+                if msg.sender != 'assistant':
+                    for context in additional_contexts:
+                        for trigger in context['trigger_words']:
+                            regex = re.compile(trigger, re.I)
+                            match = regex.search(msg.text)
+                            if match:
+                                text = f"<|start_header_id|>system<|end_header_id|>\n\n{context['context']}<|eot_id|>{text}"
+                                break
             if self.token_len(prefix + text + prompt + suffix) >= self.context_length:
                 break
             prompt = text + prompt
@@ -147,21 +152,15 @@ class ReplicateLlamaResponder(Responder):
                 break
         
         text = "".join(output)
-        tool, tool_response = await asyncio.to_thread(self.tools.parse_tool, text, asyncio.get_running_loop())
+        tool = await asyncio.to_thread(self.tools.parse_tool, text, asyncio.get_running_loop())
         if tool is not None:
-            if tool_response is None:
-                text = text[:text.find('<|start_tool|>')]
-                if not text:
-                    return await self.generate_response(messages, recursion_depth+1)
-                return (input, text)
-            response_log = tool_response
+            response_log = tool.result
             if "\n" in response_log:
                 response_log = response_log.splitlines()
                 response_log = response_log[0] + f"... (Truncated {sum(len(x) for x in response_log[1:])} characters)"
             print(tool.expression, "==>", response_log)
-            if tool_response:
-                messages.insert(0, Message(Message.generate_id(messages), messages[0].id, 'assistant', f'<|start_tool|>{tool}<|end_tool|>'))
-                messages.insert(0, Message(Message.generate_id(messages), messages[0].id, 'system', f'Response:\n\n{tool_response!s}'))
+            if tool.result:
+                messages.insert(0, Message(Message.generate_id(messages), messages[0].id, 'assistant', tool_calls=[tool]))
                 return await self.generate_response(messages, recursion_depth+1)
 
         return (input, text)

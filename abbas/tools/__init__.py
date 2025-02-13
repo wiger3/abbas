@@ -4,8 +4,9 @@ import inspect
 import asyncio
 import importlib
 import importlib.util
-from traceback import format_exc
+from traceback import print_exc
 from abc import ABC, abstractmethod
+from ..message import ToolCall
 from typing import Callable, Optional
 
 class ToolsManager(ABC):
@@ -26,7 +27,7 @@ class ToolsManager(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def parse_tool(self, text, loop: Optional[asyncio.AbstractEventLoop] = None) -> tuple[str, str] | tuple[None, None]:
+    def parse_tool(self, text, loop: Optional[asyncio.AbstractEventLoop] = None) -> ToolCall | None:
         """
         Parse and execute a tool.
 
@@ -39,10 +40,8 @@ class ToolsManager(ABC):
                   If not provided, a new loop will be created and ran.
         
         Returns:
-            tuple of:
-                [0] - the tool call itself ("tool(args)")
-                [1] - the result of the tool as string, or the summary of an exception that occurred
-            or tuple of (None, None) if text doesn't contain a tool call
+            ToolCall object containing the function call and its result
+            or None if text doesn't contain a tool call
         
         Notes:
             Thread creation is the responsibility of the caller.
@@ -77,10 +76,10 @@ class LlamaToolsManager(ToolsManager):
             tools.append(f"{name}{sig} - {doc}")
         return "\n".join(tools)
     
-    def parse_tool(self, text: str, loop: asyncio.AbstractEventLoop | None = None) -> tuple[str, str] | tuple[None, None]:
+    def parse_tool(self, text: str, loop: asyncio.AbstractEventLoop | None = None) -> ToolCall | None:
         idx = text.find('<|start_tool|>')
         if idx == -1:
-            return None, None
+            return None
         idx += len('<|start_tool|>')
         idx2 = text.find('<|end_tool|>', idx)
         if idx2 == -1:
@@ -88,14 +87,8 @@ class LlamaToolsManager(ToolsManager):
         
         tool = text[idx:idx2]
         if not tool:
-            return None, None
-        try:
-            ret = self._parse_tool(tool, loop)
-        except Exception as e:
-            print(f"Exception while calling tool {tool}:")
-            print(format_exc())
-            return tool, f"Error: {str(e).split('\n')[-1]}"
-        return tool, str(ret)
+            return None
+        return self._parse_tool(tool, loop)
     
     def _parse_tool(self, tool: str, loop: Optional[asyncio.AbstractEventLoop]):
         tree = ast.parse(tool, mode='eval')
@@ -117,5 +110,16 @@ class LlamaToolsManager(ToolsManager):
         target = self.available_tools[tree.body.func.id]
         args = tuple(x.value for x in tree.body.args)
         kwargs = {x.arg: x.value.value for x in tree.body.keywords}
-        return self._run_tool(target, args, kwargs, loop)
 
+        sig = inspect.signature(target)
+        tc_arguments = {k: v for k, v in zip(sig.parameters.keys(), args)}
+        tc_arguments.update(kwargs)
+
+        try:
+            ret = self._run_tool(target, args, kwargs, loop)
+        except Exception as e:
+            print(f"Exception while calling tool {tool}:")
+            print_exc()
+            ret = f"Error: {str(e).split('\n')[-1]}"
+
+        return ToolCall(None, tree.body.func.id, tc_arguments, str(ret))

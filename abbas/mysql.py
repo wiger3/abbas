@@ -1,5 +1,6 @@
+import json
 import mysql.connector.aio as mysql
-from .message import Message
+from .message import Message, ToolCall
 
 class MySQL:
     def __init__(self, **sql_auth):
@@ -25,7 +26,7 @@ class MySQL:
         """
         if not self.connected:
             raise RuntimeError("MySQL server not connected!")
-        await self.cur.execute("INSERT INTO `messages` VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE text=%s", (*message.tuple(), message.text))
+        await self._insert_message(message)
         await self.db.commit()
     async def insert_messages(self, messages: list[Message]):
         """
@@ -37,8 +38,13 @@ class MySQL:
             if not isinstance(message, Message):
                 print(f"TypeError: insert_messages() requires abbas.message.Message, not {type(message)}")
                 continue
-            await self.cur.execute("INSERT INTO `messages` VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE text=%s", (*message.tuple(), message.text))
+            await self._insert_message(message)
         await self.db.commit()
+    async def _insert_message(self, message: Message):
+        await self.cur.execute("INSERT INTO `messages` VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE text=%s", (*message.tuple(), message.text))
+        if message.tool_calls:
+            for tc in message.tool_calls:
+                await self.cur.execute("INSERT IGNORE INTO `toolcalls` VALUES (%s, %s, %s, %s, %s)", (tc.id, tc.name, json.dumps(tc.arguments), tc.result, message.id))
 
     async def fetch_message_list(self, message_id: int) -> list[Message]:
         """
@@ -57,4 +63,10 @@ class MySQL:
                             SELECT * FROM cte;
                         """, (message_id,))
         result = await self.cur.fetchall()
-        return [Message(*x) for x in result]
+        
+        ret = []
+        for msg in result:
+            await self.cur.execute("SELECT `id`, `name`, `arguments`, `result` FROM `toolcalls` WHERE `message_id`=%s", (msg[0],))
+            toolcalls = await self.cur.fetchall()
+            ret.append(Message(*msg, [ToolCall(*x) for x in toolcalls]))
+        return ret
