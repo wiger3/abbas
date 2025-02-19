@@ -10,7 +10,8 @@ from ..message import ToolCall
 from typing import Callable, Optional
 
 class ToolsManager(ABC):
-    def __init__(self):
+    def __init__(self, *, print_errors: bool = True):
+        self.print_errors = print_errors
         tools_dir = os.path.dirname(__file__)
         self.available_tools = {}
         for file in os.listdir(tools_dir):
@@ -119,8 +120,9 @@ class LlamaToolsManager(ToolsManager):
             tc_arguments.update(kwargs)
             ret = self._run_tool(target, args, kwargs, loop)
         except Exception as e:
-            print(f"Exception while calling tool {tool}:")
-            print_exc()
+            if self.print_errors:
+                print(f"Exception while calling tool {tool}:")
+                print_exc()
             ret = f"Error: {str(e).split('\n')[-1]}"
 
         return ToolCall(None, name, tc_arguments, str(ret))
