@@ -2,10 +2,19 @@ import ast
 import math
 import operator
 
-MAX_VALUE = 2**128
-MAX_FACTORIAL = 34
 MAX_POW = 128
-MAX_LSHIFT = 127
+
+MAX_VALUE = 2**MAX_POW
+MAX_LSHIFT = MAX_POW-1
+
+def _get_max_factorial():
+    a = 2
+    for i in range(2, MAX_POW):
+        if a >= MAX_VALUE:
+            break
+        a *= i
+    return i-1
+MAX_FACTORIAL = _get_max_factorial()
 
 def calculator(query: str):
     """A simple calculator. Supports math functions like "sqrt", "cos", etc. Use every time the user asks a math question."""
