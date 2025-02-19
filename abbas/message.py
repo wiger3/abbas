@@ -35,10 +35,12 @@ class Message:
         return id
 
 class ToolCall:
-    def __init__(self, id: Optional[str], name: str, arguments: dict | str, result: str):
+    def __init__(self, id: Optional[str], name: str, arguments: dict | str | None, result: str):
         self.id = id or str(uuid4())
         self.name = name
-        if isinstance(arguments, dict):
+        if arguments is None:
+            self.arguments = None
+        elif isinstance(arguments, dict):
             self.arguments = arguments
         elif isinstance(arguments, str):
             self.arguments = json.loads(arguments)
@@ -51,5 +53,8 @@ class ToolCall:
     
     @property
     def expression(self):
+        if self.arguments is None:
+            return self.name
+        
         params = ', '.join(f'{x}="{y}"' for x, y in self.arguments.items())
         return f"{self.name}({params})"

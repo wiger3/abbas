@@ -91,6 +91,7 @@ class LlamaToolsManager(ToolsManager):
         return self._parse_tool(tool, loop)
     
     def _parse_tool(self, tool: str, loop: Optional[asyncio.AbstractEventLoop]):
+        name, tc_arguments = tool, None
         try:
             tree = ast.parse(tool, mode='eval')
 
@@ -108,7 +109,8 @@ class LlamaToolsManager(ToolsManager):
                 if not isinstance(node.value, ast.Constant):
                     raise ValueError(f"Invalid body.keywords: {type(node.value).__name__}")
             
-            target = self.available_tools[tree.body.func.id]
+            name = tree.body.func.id
+            target = self.available_tools[name]
             args = tuple(x.value for x in tree.body.args)
             kwargs = {x.arg: x.value.value for x in tree.body.keywords}
 
@@ -121,4 +123,4 @@ class LlamaToolsManager(ToolsManager):
             print_exc()
             ret = f"Error: {str(e).split('\n')[-1]}"
 
-        return ToolCall(None, tree.body.func.id, tc_arguments, str(ret))
+        return ToolCall(None, name, tc_arguments, str(ret))
