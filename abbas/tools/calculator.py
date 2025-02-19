@@ -1,7 +1,11 @@
 import ast
 import math
+import operator
 
 MAX_VALUE = 2**128
+MAX_FACTORIAL = 34
+MAX_POW = 128
+MAX_LSHIFT = 127
 
 def calculator(query: str):
     """A simple calculator. Supports math functions like "sqrt", "cos", etc. Use every time the user asks a math question."""
@@ -52,6 +56,30 @@ def calculator(query: str):
         ast.Load,
     }
 
+    ops = {
+        ast.UAdd: operator.pos,
+        ast.USub: operator.neg,
+        ast.Invert: operator.invert,
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.FloorDiv: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
+        ast.LShift: operator.lshift,
+        ast.RShift: operator.rshift,
+        ast.BitOr: operator.or_,
+        ast.BitXor: operator.xor,
+        ast.BitAnd: operator.and_,
+        ast.Compare: operator.eq,
+        ast.NotEq: operator.ne,
+        ast.Lt: operator.lt,
+        ast.LtE: operator.le,
+        ast.Gt: operator.gt,
+        ast.GtE: operator.ge
+    }
+
     def _validate(node):
         if type(node) not in allowed_nodes:
             raise ValueError(f"Disallowed operation: {type(node).__name__}")
@@ -65,16 +93,67 @@ def calculator(query: str):
         if isinstance(node, ast.Constant):
             if not isinstance(node.value, (int, float, bool)):
                 raise ValueError(f"Disallowed value: {node.value}")
-            if isinstance(node.value, (int, float)) and node.value > MAX_VALUE:
-                raise ValueError(f"Disallowed value: {node.value}")
 
         for child in ast.iter_child_nodes(node):
             _validate(child)
     _validate(tree)
 
-    globals = {'__builtins__': None}
+    def _evaluate(node):
+        if isinstance(node, ast.Constant):
+            result = node.value
+        elif isinstance(node, ast.Name):
+            result = locals[node.id]
+        elif isinstance(node, ast.Expression):
+            result = _evaluate(node.body)
+        elif isinstance(node, ast.Call):
+            target = node.func.id
+            args = tuple(_evaluate(x) for x in node.args)
+            kwargs = {x.arg: _evaluate(x.value) for x in node.keywords}
+            
+            if target == 'factorial':
+                if args[0] > MAX_FACTORIAL:
+                    raise OverflowError
+            if target == 'comb' or target == 'perm':
+                if (target == 'comb' and len(args) == 2
+                    or target == 'perm' and 1 <= len(args) <= 2):
+
+                    if len(args) >= 2 and args[1] > args[0]:
+                        return 0
+                    if any(x > MAX_FACTORIAL for x in args):
+                        raise OverflowError
+
+            globals = {'__builtins__': None}
+            locals_ = locals.copy()
+            locals_.update({'target': locals[target], 'args': args, 'kwargs': kwargs})
+            
+            # call in sandbox
+            result = eval("target(*args, **kwargs)", globals, locals_)
+        elif isinstance(node, ast.UnaryOp):
+            operator = ops[type(node.op)]
+            operand = _evaluate(node.operand)
+            result = operator(operand)
+        elif isinstance(node, ast.BinOp):
+            operator = ops[type(node.op)]
+            left = _evaluate(node.left)
+            right = _evaluate(node.right)
+
+            if isinstance(node.op, ast.Pow):
+                if abs(left) > MAX_POW or abs(right) > MAX_POW:
+                    raise OverflowError
+            if isinstance(node.op, ast.LShift):
+                if right > MAX_LSHIFT:
+                    raise OverflowError
+
+            result = operator(left, right)
+        else:
+            raise ValueError(f"Invalid ast node? {type(node).__name__}")
+        
+        if abs(result) > MAX_VALUE:
+            raise OverflowError
+        return result
+    
     try:
-        result = eval(compile(tree, '<string>', 'eval'), globals, locals)
+        result = _evaluate(tree)
     except (ZeroDivisionError, OverflowError):
         result = math.inf
     return result
