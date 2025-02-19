@@ -91,31 +91,30 @@ class LlamaToolsManager(ToolsManager):
         return self._parse_tool(tool, loop)
     
     def _parse_tool(self, tool: str, loop: Optional[asyncio.AbstractEventLoop]):
-        tree = ast.parse(tool, mode='eval')
-
-        # validation
-        if not isinstance(tree.body, ast.Call):
-            raise TypeError(f"Invalid body: {type(tree.body).__name__}")
-        if not isinstance(tree.body.func, ast.Name):
-            raise TypeError(f"Invalid body.func: {type(tree.body.func).__name__}")
-        if not tree.body.func.id in self.available_tools:
-            raise ValueError(f"Unknown tool: {tree.body.func.id}")
-        for node in tree.body.args:
-            if not isinstance(node, ast.Constant):
-                raise ValueError(f"Invalid body.args: {type(node).__name__}")
-        for node in tree.body.keywords:
-            if not isinstance(node.value, ast.Constant):
-                raise ValueError(f"Invalid body.keywords: {type(node.value).__name__}")
-        
-        target = self.available_tools[tree.body.func.id]
-        args = tuple(x.value for x in tree.body.args)
-        kwargs = {x.arg: x.value.value for x in tree.body.keywords}
-
-        sig = inspect.signature(target)
-        tc_arguments = {k: v for k, v in zip(sig.parameters.keys(), args)}
-        tc_arguments.update(kwargs)
-
         try:
+            tree = ast.parse(tool, mode='eval')
+
+            # validation
+            if not isinstance(tree.body, ast.Call):
+                raise TypeError(f"Invalid body: {type(tree.body).__name__}")
+            if not isinstance(tree.body.func, ast.Name):
+                raise TypeError(f"Invalid body.func: {type(tree.body.func).__name__}")
+            if not tree.body.func.id in self.available_tools:
+                raise ValueError(f"Unknown tool: {tree.body.func.id}")
+            for node in tree.body.args:
+                if not isinstance(node, ast.Constant):
+                    raise ValueError(f"Invalid body.args: {type(node).__name__}")
+            for node in tree.body.keywords:
+                if not isinstance(node.value, ast.Constant):
+                    raise ValueError(f"Invalid body.keywords: {type(node.value).__name__}")
+            
+            target = self.available_tools[tree.body.func.id]
+            args = tuple(x.value for x in tree.body.args)
+            kwargs = {x.arg: x.value.value for x in tree.body.keywords}
+
+            sig = inspect.signature(target)
+            tc_arguments = {k: v for k, v in zip(sig.parameters.keys(), args)}
+            tc_arguments.update(kwargs)
             ret = self._run_tool(target, args, kwargs, loop)
         except Exception as e:
             print(f"Exception while calling tool {tool}:")
