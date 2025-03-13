@@ -19,6 +19,7 @@ CREATE TABLE `toolcalls` (
   `id` varchar(36) NOT NULL,
   `name` varchar(80) NOT NULL,
   `arguments` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`arguments`)),
+  `result` text NOT NULL,
   `message_id` bigint(20) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
